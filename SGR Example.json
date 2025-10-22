@@ -1,0 +1,173 @@
+{
+	"name": "SGR Example",
+	"nodes": [
+		{
+			"parameters": {
+				"options": {}
+			},
+			"type": "@n8n/n8n-nodes-langchain.chatTrigger",
+			"typeVersion": 1.3,
+			"position": [-144, -48],
+			"id": "2f643b23-e672-40b6-80e4-0f65dc26eb2e",
+			"name": "When chat message received",
+			"webhookId": "e15b4d05-bdf7-4f19-ad0c-7cef35b2b773"
+		},
+		{
+			"parameters": {
+				"model": {
+					"__rl": true,
+					"value": "openai/gpt-4.1-mini",
+					"mode": "list",
+					"cachedResultName": "openai/gpt-4.1-mini"
+				},
+				"options": {}
+			},
+			"type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+			"typeVersion": 1.2,
+			"position": [16, 176],
+			"id": "c41f1dd1-3c34-43be-bb0c-241cb8623814",
+			"name": "OpenAI Chat Model",
+			"credentials": {}
+		},
+		{
+			"parameters": {
+				"builtInTools": {
+					"enableReasoning": true,
+					"enableFinalAnswer": true,
+					"enableCreateReport": true,
+					"enableClarification": true,
+					"enableGeneratePlan": true,
+					"enableAdaptPlan": true
+				},
+				"prompts": {},
+				"options": {}
+			},
+			"type": "CUSTOM.sgrToolCalling",
+			"typeVersion": 1,
+			"position": [96, -64],
+			"id": "4637b545-59b2-4620-ac39-e709e6f696dc",
+			"name": "SGR Agent"
+		},
+		{
+			"parameters": {},
+			"type": "CUSTOM.sgrTavilySearchTool",
+			"typeVersion": 1,
+			"position": [448, 176],
+			"id": "4d9dc4e1-b1b3-4f9d-9b2f-b3e92ad28258",
+			"name": "SGR Tavily Search",
+			"credentials": {}
+		},
+		{
+			"parameters": {
+				"contextWindowLength": 10
+			},
+			"type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+			"typeVersion": 1.3,
+			"position": [544, 32],
+			"id": "a3c78e55-2f34-4855-a3a1-6f258c3dc8a1",
+			"name": "Simple Memory"
+		},
+		{
+			"parameters": {
+				"endpointUrl": "https://mcp.deepwiki.com/mcp",
+				"options": {}
+			},
+			"type": "@n8n/n8n-nodes-langchain.mcpClientTool",
+			"typeVersion": 1.2,
+			"position": [176, 176],
+			"id": "52f8db8b-72f0-441a-8d44-cc8b57cf596c",
+			"name": "MCP deepwiki"
+		},
+		{
+			"parameters": {
+				"endpointUrl": "https://mcp.context7.com/mcp",
+				"options": {}
+			},
+			"type": "@n8n/n8n-nodes-langchain.mcpClientTool",
+			"typeVersion": 1.2,
+			"position": [304, 176],
+			"id": "ae8129f6-00c1-48a1-9ef7-42826bde2e3c",
+			"name": "MCP context7"
+		}
+	],
+	"pinData": {},
+	"connections": {
+		"When chat message received": {
+			"main": [
+				[
+					{
+						"node": "SGR Agent",
+						"type": "main",
+						"index": 0
+					}
+				]
+			]
+		},
+		"OpenAI Chat Model": {
+			"ai_languageModel": [
+				[
+					{
+						"node": "SGR Agent",
+						"type": "ai_languageModel",
+						"index": 0
+					}
+				]
+			]
+		},
+		"SGR Tavily Search": {
+			"ai_tool": [
+				[
+					{
+						"node": "SGR Agent",
+						"type": "ai_tool",
+						"index": 0
+					}
+				]
+			]
+		},
+		"Simple Memory": {
+			"ai_memory": [
+				[
+					{
+						"node": "SGR Agent",
+						"type": "ai_memory",
+						"index": 0
+					}
+				]
+			]
+		},
+		"MCP deepwiki": {
+			"ai_tool": [
+				[
+					{
+						"node": "SGR Agent",
+						"type": "ai_tool",
+						"index": 0
+					}
+				]
+			]
+		},
+		"MCP context7": {
+			"ai_tool": [
+				[
+					{
+						"node": "SGR Agent",
+						"type": "ai_tool",
+						"index": 0
+					}
+				]
+			]
+		}
+	},
+	"active": false,
+	"settings": {
+		"executionOrder": "v1"
+	},
+	"versionId": "2cbdc87f-f4d4-49d5-a8ba-72720f83151f",
+	"meta": {
+		"templateCredsSetupCompleted": true,
+		"instanceId": "d07e21a5f47ad11a00a47462086bc5aaa37720171c75841232828cb64c12cacf"
+	},
+	"id": "1KeqlBkpAMqtuPWg",
+	"tags": []
+}

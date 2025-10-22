@@ -1,0 +1,16 @@
+{
+	"node": "n8n-nodes-sgr-tool-calling.sgrTavilySearchTool",
+	"nodeVersion": "1.0",
+	"codexVersion": "1.0",
+	"categories": ["AI"],
+	"subcategories": {
+		"AI": ["Tools", "Agents"]
+	},
+	"resources": {
+		"primaryDocumentation": [
+			{
+				"url": "https://tavily.com/"
+			}
+		]
+	}
+}

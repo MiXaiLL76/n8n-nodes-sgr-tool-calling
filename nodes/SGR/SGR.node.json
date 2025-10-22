@@ -1,0 +1,16 @@
+{
+	"node": "n8n-nodes-sgr-tool-calling.sgr",
+	"nodeVersion": "1.0",
+	"codexVersion": "1.0",
+	"categories": ["AI"],
+	"subcategories": {
+		"AI": ["Agents", "Root Nodes"]
+	},
+	"resources": {
+		"primaryDocumentation": [
+			{
+				"url": "https://github.com/vamplabAI/sgr-deep-research"
+			}
+		]
+	}
+}
