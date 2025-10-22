@@ -4,7 +4,7 @@
  */
 /* eslint-disable @typescript-eslint/ban-ts-comment */
 // @ts-nocheck
-import { NodeOperationError, type IExecuteFunctions } from 'n8n-workflow';
+import { NodeOperationError, type IExecuteFunctions, type Logger } from 'n8n-workflow';
 import { AgentContext } from '../core/context';
 import type { Message, Tool, AIModelResponse } from '../types';
 import {
@@ -53,6 +53,7 @@ export interface AgentConfig {
 		clear?: () => Promise<void>;
 		[key: string]: unknown;
 	}; // n8n Memory instance for conversation caching
+	logger?: Logger; // Configurable logger
 }
 
 export abstract class BaseAgent {
@@ -67,6 +68,7 @@ export abstract class BaseAgent {
 		clear?: () => Promise<void>;
 		[key: string]: unknown;
 	};
+	protected logger: Logger;
 	private loadedMessagesCount: number = 0; // Track how many messages were loaded from memory
 
 	constructor(
@@ -80,6 +82,7 @@ export abstract class BaseAgent {
 		this.conversation = [];
 		this.aiModel = aiModel;
 		this.memory = config.memory;
+		this.logger = config.logger || executeFunctions.logger;
 	}
 
 	/**
@@ -108,9 +111,7 @@ export abstract class BaseAgent {
 							};
 						});
 						this.loadedMessagesCount = previousMessages.length;
-						this.executeFunctions.logger.info(
-							`📥 Loaded ${previousMessages.length} messages from memory`,
-						);
+						this.logger.info(`📥 Loaded ${previousMessages.length} messages from memory`);
 					}
 				} else if (typeof this.memory.getChatMessages === 'function') {
 					// Alternative interface (some memory types)
@@ -126,18 +127,14 @@ export abstract class BaseAgent {
 							content: msg.content,
 						}));
 						this.loadedMessagesCount = previousMessages.length;
-						this.executeFunctions.logger.info(
-							`📥 Loaded ${previousMessages.length} messages from memory`,
-						);
+						this.logger.info(`📥 Loaded ${previousMessages.length} messages from memory`);
 					}
 				} else {
 					// Memory doesn't have expected methods, skip loading
-					this.executeFunctions.logger.debug(
-						'Memory node connected but does not support expected interface',
-					);
+					this.logger.debug('Memory node connected but does not support expected interface');
 				}
 			} catch (error) {
-				this.executeFunctions.logger.warn(`⚠️  Failed to load memory: ${(error as Error).message}`);
+				this.logger.warn(`⚠️  Failed to load memory: ${(error as Error).message}`);
 			}
 		}
 
@@ -151,7 +148,7 @@ export abstract class BaseAgent {
 			const systemPrompt = this.conversation[0]; // system
 			const currentUserRequest = this.conversation[1]; // current task
 			this.conversation = [systemPrompt, ...previousMessages, currentUserRequest];
-			this.executeFunctions.logger.debug(
+			this.logger.debug(
 				`📋 Conversation structure: system + ${previousMessages.length} previous + current request`,
 			);
 		}
@@ -225,7 +222,7 @@ export abstract class BaseAgent {
 			}
 
 			// Log what we're sending
-			this.executeFunctions.logger.debug(
+			this.logger.debug(
 				`Calling AI model with ${this.conversation.length} messages, ${tools.length} tools`,
 			);
 
@@ -302,7 +299,7 @@ export abstract class BaseAgent {
 			}
 
 			// Log response structure for debugging
-			this.executeFunctions.logger.debug(
+			this.logger.debug(
 				`AI Response: content=${!!response.content}, tool_calls=${toolCalls.length}, response_keys=${Object.keys(response || {}).join(',')}`,
 			);
 
@@ -314,9 +311,9 @@ export abstract class BaseAgent {
 			const errorMessage = error instanceof Error ? error.message : String(error);
 			const errorStack = error instanceof Error ? error.stack : '';
 
-			this.executeFunctions.logger.error(`AI Model error: ${errorMessage}`);
+			this.logger.error(`AI Model error: ${errorMessage}`);
 			if (errorStack) {
-				this.executeFunctions.logger.debug(`Error stack: ${errorStack}`);
+				this.logger.debug(`Error stack: ${errorStack}`);
 			}
 
 			throw new NodeOperationError(
@@ -433,7 +430,7 @@ export abstract class BaseAgent {
 			const newMessages = allMessages.slice(this.loadedMessagesCount);
 
 			if (newMessages.length === 0) {
-				this.executeFunctions.logger.debug(`📭 No new messages to save to memory`);
+				this.logger.debug(`📭 No new messages to save to memory`);
 				return;
 			}
 
@@ -441,7 +438,7 @@ export abstract class BaseAgent {
 			// Don't use the formatted message which includes system prompts and dates
 			const userQuestionText = this.config.task;
 			if (!userQuestionText) {
-				this.executeFunctions.logger.debug(`📭 No user question found to save`);
+				this.logger.debug(`📭 No user question found to save`);
 				return;
 			}
 
@@ -478,9 +475,7 @@ export abstract class BaseAgent {
 
 			// If no final answer yet, don't save (agent still working)
 			if (!finalAnswer) {
-				this.executeFunctions.logger.debug(
-					`📭 No final answer yet, skipping memory save (agent still working)`,
-				);
+				this.logger.debug(`📭 No final answer yet, skipping memory save (agent still working)`);
 				return;
 			}
 
@@ -500,17 +495,15 @@ export abstract class BaseAgent {
 				});
 				await this.memory.chatHistory.addMessage({ content: finalAnswer, role: 'ai' });
 			} else {
-				this.executeFunctions.logger.debug('Memory node does not support expected save interface');
+				this.logger.debug('Memory node does not support expected save interface');
 				return;
 			}
 
-			this.executeFunctions.logger.info(
+			this.logger.info(
 				`💾 Saved conversation to memory: question + final answer (${this.loadedMessagesCount} previous messages cached)`,
 			);
 		} catch (error) {
-			this.executeFunctions.logger.warn(
-				`⚠️  Failed to save to memory: ${(error as Error).message}`,
-			);
+			this.logger.warn(`⚠️  Failed to save to memory: ${(error as Error).message}`);
 		}
 	}
 

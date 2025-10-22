@@ -1,201 +1,180 @@
 {
-  "nodes": [
-    {
-      "parameters": {
-        "options": {}
-      },
-      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
-      "typeVersion": 1.3,
-      "position": [
-        -224,
-        16
-      ],
-      "id": "c24c264e-a1ad-4374-bee0-b25db0f2d6f4",
-      "name": "When chat message received",
-      "webhookId": "a05f316a-661d-43c8-ab9c-5a86d2af2968"
-    },
-    {
-      "parameters": {
-        "builtInTools": {
-          "enableAdaptPlan": true,
-          "enableClarification": true,
-          "enableCreateReport": true,
-          "enableFinalAnswer": true,
-          "enableGeneratePlan": true,
-          "enableReasoning": true
-        },
-        "prompts": {
-          "systemPrompt": "<MAIN_TASK_GUIDELINES>\nYou are an expert researcher with adaptive planning and schema-guided-reasoning capabilities. You get the research task and you neeed to do research and genrete answer\n</MAIN_TASK_GUIDELINES>\n\n<DATE_GUIDELINES>\nPAY ATTENTION TO THE DATE INSIDE THE USER REQUEST\nDATE FORMAT: YYYY-MM-DD HH:MM:SS (ISO 8601)\nIMPORTANT: The date above is in YYYY-MM-DD format (Year-Month-Day). For example, 2025-10-03 means October 3rd, 2025, NOT March 10th.\n</DATE_GUIDELINES>\n\n<IMPORTANT_LANGUAGE_GUIDELINES>: Detect the language from user request and use this LANGUAGE for all responses, searches, and result finalanswertool\nLANGUAGE ADAPTATION: Always respond and create reports in the SAME LANGUAGE as the user's request.\nIf user writes in Russian - respond in Russian, if in English - respond in English.\n</IMPORTANT_LANGUAGE_GUIDELINES>:\n\n<CORE_PRINCIPLES>:\n1. Memorize plan you generated in first step and follow the task inside your plan.\n1. Adapt plan when new data contradicts initial assumptions\n2. Search queries in SAME LANGUAGE as user request\n3. Final Answer ENTIRELY in SAME LANGUAGE as user request\n</CORE_PRINCIPLES>\n\n<REASONING_GUIDELINES>\nADAPTIVITY: Actively change plan when discovering new data.\nANALYSIS EXTRACT DATA: Always analyze data that you took in extractpagecontenttool\n</REASONING_GUIDELINES>\n\n<PRECISION_GUIDELINES>\nCRITICAL FOR FACTUAL ACCURACY:\nWhen answering questions about specific dates, numbers, versions, or names:\n1. EXACT VALUES: Extract the EXACT value from sources (day, month, year for dates; precise numbers for quantities)\n2. VERIFY YEAR: If question mentions a specific year (e.g., \"in 2022\"), verify extracted content is about that SAME year\n3. CROSS-VERIFICATION: When sources provide contradictory information, prefer:\n   - Official sources and primary documentation over secondary sources\n   - Search result snippets that DIRECTLY answer the question over extracted page content\n   - Multiple independent sources confirming the same fact\n4. DATE PRECISION: Pay special attention to exact dates - day matters (October 21 ≠ October 22)\n5. NUMBER PRECISION: For numbers/versions, exact match required (6.88b ≠ 6.88c, Episode 31 ≠ Episode 32)\n6. SNIPPET PRIORITY: If search snippet clearly states the answer, trust it unless extract proves it wrong\n7. TEMPORAL VALIDATION: When extracting page content, check if the page shows data for correct time period\n</PRECISION_GUIDELINES>\n\n<AGENT_TOOL_USAGE_GUIDELINES>:\n{available_tools}\n</AGENT_TOOL_USAGE_GUIDELINES>",
-          "initialUserRequest": "Current Date: {current_date} (Year-Month-Day ISO format: YYYY-MM-DD HH:MM:SS)\nORIGINAL USER REQUEST:\n\n{task}",
-          "clarificationResponse": "Current Date: {current_date} (Year-Month-Day ISO format: YYYY-MM-DD HH:MM:SS)\n\nCLARIFICATIONS:\n\n{clarifications}"
-        },
-        "additionalTools": {
-          "tools": []
-        },
-        "options": {}
-      },
-      "type": "CUSTOM.sgrToolCalling",
-      "typeVersion": 1,
-      "position": [
-        -16,
-        16
-      ],
-      "id": "c84e7bd5-c506-4ced-8783-a95a52790f49",
-      "name": "SGR Agent"
-    },
-    {
-      "parameters": {
-        "model": {
-          "__rl": true,
-          "value": "openai/gpt-4.1-mini",
-          "mode": "list",
-          "cachedResultName": "openai/gpt-4.1-mini"
-        },
-        "options": {}
-      },
-      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
-      "typeVersion": 1.2,
-      "position": [
-        -160,
-        224
-      ],
-      "id": "c7ba8b85-6fd1-4182-b796-71bb0d2e9177",
-      "name": "OpenAI Chat Model",
-      "credentials": {
-        "openAiApi": {
-          "id": "ADiovoX5nrP8iXIZ",
-          "name": "OpenAi account"
-        }
-      }
-    },
-    {
-      "parameters": {},
-      "type": "CUSTOM.sgrTavilySearchTool",
-      "typeVersion": 1,
-      "position": [
-        0,
-        304
-      ],
-      "id": "8a311bac-b78e-4715-9bce-5cef8dcdf764",
-      "name": "SGR Tavily Search",
-      "credentials": {
-        "tavilyApi": {
-          "id": "5rQLQHJ8SpNU1big",
-          "name": "Tavily account"
-        }
-      }
-    },
-    {
-      "parameters": {},
-      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
-      "typeVersion": 1.3,
-      "position": [
-        368,
-        176
-      ],
-      "id": "b732bf30-6430-4f0d-87b3-b92c43825782",
-      "name": "Simple Memory"
-    },
-    {
-      "parameters": {
-        "endpointUrl": "https://mcp.context7.com/mcp",
-        "options": {}
-      },
-      "type": "@n8n/n8n-nodes-langchain.mcpClientTool",
-      "typeVersion": 1.2,
-      "position": [
-        256,
-        272
-      ],
-      "id": "4f4de22a-bf8d-4ea3-b847-27004c729bcb",
-      "name": "MCP context7"
-    },
-    {
-      "parameters": {
-        "endpointUrl": "https://mcp.deepwiki.com/mcp",
-        "options": {}
-      },
-      "type": "@n8n/n8n-nodes-langchain.mcpClientTool",
-      "typeVersion": 1.2,
-      "position": [
-        128,
-        288
-      ],
-      "id": "49a089a9-60d7-483b-b76f-3656d00624c8",
-      "name": "MCP deepwiki"
-    }
-  ],
-  "connections": {
-    "When chat message received": {
-      "main": [
-        [
-          {
-            "node": "SGR Agent",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "OpenAI Chat Model": {
-      "ai_languageModel": [
-        [
-          {
-            "node": "SGR Agent",
-            "type": "ai_languageModel",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "SGR Tavily Search": {
-      "ai_tool": [
-        [
-          {
-            "node": "SGR Agent",
-            "type": "ai_tool",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Simple Memory": {
-      "ai_memory": [
-        [
-          {
-            "node": "SGR Agent",
-            "type": "ai_memory",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "MCP context7": {
-      "ai_tool": [
-        [
-          {
-            "node": "SGR Agent",
-            "type": "ai_tool",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "MCP deepwiki": {
-      "ai_tool": [
-        [
-          {
-            "node": "SGR Agent",
-            "type": "ai_tool",
-            "index": 0
-          }
-        ]
-      ]
-    }
-  },
-  "pinData": {},
-  "meta": {
-    "templateCredsSetupCompleted": true,
-    "instanceId": "c8f2c278dffe2afeb32ae7530b0e166ca09cfdac5bb04acbf389aa8bf564b5eb"
-  }
+	"nodes": [
+		{
+			"parameters": {
+				"options": {}
+			},
+			"type": "@n8n/n8n-nodes-langchain.chatTrigger",
+			"typeVersion": 1.3,
+			"position": [0, 0],
+			"id": "c811e616-fbf4-4bb8-8012-531346f59b80",
+			"name": "When chat message received",
+			"webhookId": "a05f316a-661d-43c8-ab9c-5a86d2af2968"
+		},
+		{
+			"parameters": {
+				"logLevel": "error",
+				"builtInTools": {
+					"enableAdaptPlan": true,
+					"enableClarification": true,
+					"enableCreateReport": true,
+					"enableFinalAnswer": true,
+					"enableGeneratePlan": true,
+					"enableReasoning": true
+				},
+				"prompts": {
+					"systemPrompt": "<MAIN_TASK_GUIDELINES>\nYou are an expert researcher with adaptive planning and schema-guided-reasoning capabilities. You get the research task and you neeed to do research and genrete answer\n</MAIN_TASK_GUIDELINES>\n\n<DATE_GUIDELINES>\nPAY ATTENTION TO THE DATE INSIDE THE USER REQUEST\nDATE FORMAT: YYYY-MM-DD HH:MM:SS (ISO 8601)\nIMPORTANT: The date above is in YYYY-MM-DD format (Year-Month-Day). For example, 2025-10-03 means October 3rd, 2025, NOT March 10th.\n</DATE_GUIDELINES>\n\n<IMPORTANT_LANGUAGE_GUIDELINES>: Detect the language from user request and use this LANGUAGE for all responses, searches, and result finalanswertool\nLANGUAGE ADAPTATION: Always respond and create reports in the SAME LANGUAGE as the user's request.\nIf user writes in Russian - respond in Russian, if in English - respond in English.\n</IMPORTANT_LANGUAGE_GUIDELINES>:\n\n<CORE_PRINCIPLES>:\n1. Memorize plan you generated in first step and follow the task inside your plan.\n1. Adapt plan when new data contradicts initial assumptions\n2. Search queries in SAME LANGUAGE as user request\n3. Final Answer ENTIRELY in SAME LANGUAGE as user request\n</CORE_PRINCIPLES>\n\n<REASONING_GUIDELINES>\nADAPTIVITY: Actively change plan when discovering new data.\nANALYSIS EXTRACT DATA: Always analyze data that you took in extractpagecontenttool\n</REASONING_GUIDELINES>\n\n<PRECISION_GUIDELINES>\nCRITICAL FOR FACTUAL ACCURACY:\nWhen answering questions about specific dates, numbers, versions, or names:\n1. EXACT VALUES: Extract the EXACT value from sources (day, month, year for dates; precise numbers for quantities)\n2. VERIFY YEAR: If question mentions a specific year (e.g., \"in 2022\"), verify extracted content is about that SAME year\n3. CROSS-VERIFICATION: When sources provide contradictory information, prefer:\n   - Official sources and primary documentation over secondary sources\n   - Search result snippets that DIRECTLY answer the question over extracted page content\n   - Multiple independent sources confirming the same fact\n4. DATE PRECISION: Pay special attention to exact dates - day matters (October 21 ≠ October 22)\n5. NUMBER PRECISION: For numbers/versions, exact match required (6.88b ≠ 6.88c, Episode 31 ≠ Episode 32)\n6. SNIPPET PRIORITY: If search snippet clearly states the answer, trust it unless extract proves it wrong\n7. TEMPORAL VALIDATION: When extracting page content, check if the page shows data for correct time period\n</PRECISION_GUIDELINES>\n\n<AGENT_TOOL_USAGE_GUIDELINES>:\n{available_tools}\n</AGENT_TOOL_USAGE_GUIDELINES>",
+					"initialUserRequest": "Current Date: {current_date} (Year-Month-Day ISO format: YYYY-MM-DD HH:MM:SS)\nORIGINAL USER REQUEST:\n\n{task}",
+					"clarificationResponse": "Current Date: {current_date} (Year-Month-Day ISO format: YYYY-MM-DD HH:MM:SS)\n\nCLARIFICATIONS:\n\n{clarifications}"
+				},
+				"additionalTools": {
+					"tools": []
+				},
+				"options": {}
+			},
+			"type": "CUSTOM.sgrToolCalling",
+			"typeVersion": 1,
+			"position": [208, 0],
+			"id": "c179a12d-f90a-49d8-adff-38ab74ed1703",
+			"name": "SGR Agent"
+		},
+		{
+			"parameters": {
+				"model": {
+					"__rl": true,
+					"value": "openai/gpt-4.1-mini",
+					"mode": "list",
+					"cachedResultName": "openai/gpt-4.1-mini"
+				},
+				"options": {}
+			},
+			"type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+			"typeVersion": 1.2,
+			"position": [64, 208],
+			"id": "b754af75-1c19-41dd-a325-5fc202eae11a",
+			"name": "OpenAI Chat Model",
+			"credentials": {
+				"openAiApi": {
+					"id": "ADiovoX5nrP8iXIZ",
+					"name": "OpenAi account"
+				}
+			}
+		},
+		{
+			"parameters": {},
+			"type": "CUSTOM.sgrTavilySearchTool",
+			"typeVersion": 1,
+			"position": [224, 256],
+			"id": "b36f417a-faec-486d-95ea-0423c992bb28",
+			"name": "SGR Tavily Search",
+			"credentials": {
+				"tavilyApi": {
+					"id": "5rQLQHJ8SpNU1big",
+					"name": "Tavily account"
+				}
+			}
+		},
+		{
+			"parameters": {},
+			"type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+			"typeVersion": 1.3,
+			"position": [608, 192],
+			"id": "61829a58-1118-4a1d-bfc9-e0a7436e7c90",
+			"name": "Simple Memory"
+		},
+		{
+			"parameters": {
+				"endpointUrl": "https://mcp.context7.com/mcp",
+				"options": {}
+			},
+			"type": "@n8n/n8n-nodes-langchain.mcpClientTool",
+			"typeVersion": 1.2,
+			"position": [496, 304],
+			"id": "dd86c162-d82b-4ef9-a899-936aa134a52a",
+			"name": "MCP context7"
+		},
+		{
+			"parameters": {
+				"endpointUrl": "https://mcp.deepwiki.com/mcp",
+				"options": {}
+			},
+			"type": "@n8n/n8n-nodes-langchain.mcpClientTool",
+			"typeVersion": 1.2,
+			"position": [384, 272],
+			"id": "e9405a32-9b2e-41a3-b66c-d07200ee0370",
+			"name": "MCP deepwiki"
+		}
+	],
+	"connections": {
+		"When chat message received": {
+			"main": [
+				[
+					{
+						"node": "SGR Agent",
+						"type": "main",
+						"index": 0
+					}
+				]
+			]
+		},
+		"OpenAI Chat Model": {
+			"ai_languageModel": [
+				[
+					{
+						"node": "SGR Agent",
+						"type": "ai_languageModel",
+						"index": 0
+					}
+				]
+			]
+		},
+		"SGR Tavily Search": {
+			"ai_tool": [
+				[
+					{
+						"node": "SGR Agent",
+						"type": "ai_tool",
+						"index": 0
+					}
+				]
+			]
+		},
+		"Simple Memory": {
+			"ai_memory": [
+				[
+					{
+						"node": "SGR Agent",
+						"type": "ai_memory",
+						"index": 0
+					}
+				]
+			]
+		},
+		"MCP context7": {
+			"ai_tool": [
+				[
+					{
+						"node": "SGR Agent",
+						"type": "ai_tool",
+						"index": 0
+					}
+				]
+			]
+		},
+		"MCP deepwiki": {
+			"ai_tool": [
+				[
+					{
+						"node": "SGR Agent",
+						"type": "ai_tool",
+						"index": 0
+					}
+				]
+			]
+		}
+	},
+	"pinData": {},
+	"meta": {
+		"instanceId": "c8f2c278dffe2afeb32ae7530b0e166ca09cfdac5bb04acbf389aa8bf564b5eb"
+	}
 }

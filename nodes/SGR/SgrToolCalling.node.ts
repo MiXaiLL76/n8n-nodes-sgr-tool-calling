@@ -26,6 +26,7 @@ import {
 	handleToolsCommand,
 	handleClearCommand,
 } from './core/commands';
+import { ConfigurableLogger, type LogLevel } from './core/logger';
 
 // Type definitions for n8n AI components
 interface N8nAiLanguageModel {
@@ -104,6 +105,40 @@ export class SgrToolCalling implements INodeType {
 		],
 		outputs: [NodeConnectionTypes.Main],
 		properties: [
+			{
+				displayName: 'Log Level',
+				name: 'logLevel',
+				type: 'options',
+				default: 'error',
+				description: 'Set the logging level for the agent',
+				options: [
+					{
+						name: 'Debug',
+						value: 'debug',
+						description: 'All messages including debug info',
+					},
+					{
+						name: 'Error',
+						value: 'error',
+						description: 'Only error messages',
+					},
+					{
+						name: 'Info',
+						value: 'info',
+						description: 'Info, warnings and errors',
+					},
+					{
+						name: 'None',
+						value: 'none',
+						description: 'No logging output',
+					},
+					{
+						name: 'Warning',
+						value: 'warn',
+						description: 'Warnings and errors',
+					},
+				],
+			},
 			{
 				displayName: 'Built-in Tools',
 				name: 'builtInTools',
@@ -329,10 +364,14 @@ export class SgrToolCalling implements INodeType {
 		let lastSessionId: string | undefined;
 
 		for (let itemIndex = 0; itemIndex < items.length; itemIndex++) {
+			// Get log level configuration and create logger wrapper
+			const logLevel = this.getNodeParameter('logLevel', itemIndex, 'error') as LogLevel;
+			const logger = new ConfigurableLogger(this.logger, logLevel);
+
 			// Log session ID and input data for debugging
 			const sessionId = items[itemIndex].json.sessionId as string | undefined;
-			this.logger.info(`🔑 Session ID: ${sessionId || 'NOT PROVIDED'}`);
-			this.logger.debug(`📦 Input keys: ${Object.keys(items[itemIndex].json).join(', ')}`);
+			logger.info(`🔑 Session ID: ${sessionId || 'NOT PROVIDED'}`);
+			logger.debug(`📦 Input keys: ${Object.keys(items[itemIndex].json).join(', ')}`);
 
 			// Get connected Memory (optional) - PER ITEM to support different session IDs
 			// Memory node uses sessionId from $json.sessionId which can be different for each item
@@ -342,26 +381,24 @@ export class SgrToolCalling implements INodeType {
 			)) as N8nAiMemory | undefined;
 
 			if (memory) {
-				this.logger.debug(`💾 Memory connected for this item`);
+				logger.debug(`💾 Memory connected for this item`);
 
 				// Check if session ID changed - if yes, clear memory for fresh start
 				if (lastSessionId && sessionId && lastSessionId !== sessionId) {
-					this.logger.info(
-						`🔄 Session ID changed: ${lastSessionId} → ${sessionId}, clearing memory`,
-					);
+					logger.info(`🔄 Session ID changed: ${lastSessionId} → ${sessionId}, clearing memory`);
 					try {
 						if (typeof memory.clear === 'function') {
 							await memory.clear();
-							this.logger.info('🗑️  Memory cleared for new session');
+							logger.info('🗑️  Memory cleared for new session');
 						}
 					} catch (error) {
-						this.logger.warn(`⚠️  Failed to clear memory: ${(error as Error).message}`);
+						logger.warn(`⚠️  Failed to clear memory: ${(error as Error).message}`);
 					}
 				}
 
 				lastSessionId = sessionId;
 			} else {
-				this.logger.debug(`📭 No memory connected`);
+				logger.debug(`📭 No memory connected`);
 			}
 
 			try {
@@ -407,11 +444,11 @@ export class SgrToolCalling implements INodeType {
 				// Convert connected tools to internal format
 				const connectedTools = rawConnectedTools
 					? convertN8nToolsToInternal(rawConnectedTools as unknown as N8nAITool[]).map((tool) =>
-							createLoggedToolWrapper(tool, this),
+							createLoggedToolWrapper(tool, logger),
 						)
 					: [];
 
-				this.logger.info(
+				logger.info(
 					`🔧 Converted ${connectedTools.length} external tools: ${connectedTools.map((t) => t.name).join(', ')}`,
 				);
 
@@ -428,6 +465,7 @@ export class SgrToolCalling implements INodeType {
 					additionalTools: (additionalTools.tools as AdditionalToolConfig[]) || [],
 					connectedTools,
 					memory: memory || undefined,
+					logger,
 				};
 
 				// Check for special commands
@@ -445,12 +483,7 @@ export class SgrToolCalling implements INodeType {
 
 				// Handle /clear or /new command
 				if (commandName === 'clear') {
-					return await handleClearCommand(
-						memory,
-						this.logger,
-						itemIndex,
-						options.answerOnly || false,
-					);
+					return await handleClearCommand(memory, logger, itemIndex, options.answerOnly || false);
 				}
 
 				// Handle clearMemory via JSON input (for compatibility)
@@ -461,10 +494,10 @@ export class SgrToolCalling implements INodeType {
 					try {
 						if (typeof memory.clear === 'function') {
 							await memory.clear();
-							this.logger.info('🗑️  Memory cleared for new session');
+							logger.info('🗑️  Memory cleared for new session');
 						}
 					} catch (error) {
-						this.logger.warn(`⚠️  Failed to clear memory: ${(error as Error).message}`);
+						logger.warn(`⚠️  Failed to clear memory: ${(error as Error).message}`);
 					}
 				}
 

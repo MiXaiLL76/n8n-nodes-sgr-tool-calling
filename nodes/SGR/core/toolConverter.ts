@@ -4,15 +4,17 @@
  */
 /* eslint-disable @typescript-eslint/ban-ts-comment */
 // @ts-nocheck
-import type { IExecuteFunctions } from 'n8n-workflow';
+import type { IExecuteFunctions, Logger } from 'n8n-workflow';
 
 export interface N8nAITool {
 	name: string;
 	description: string;
-	schema?: Record<string, unknown>;
+	schema?: Record<string, unknown> | { parse?: (args: unknown) => unknown; [key: string]: unknown };
 	call?: (args: Record<string, unknown>) => Promise<string | object>;
 	// LangChain DynamicTool interface
 	func?: (input: string) => Promise<string>;
+	// LangChain Tool interface (wrapped by logWrapper)
+	_call?: (query: string) => Promise<string>;
 	// Additional metadata
 	[key: string]: unknown;
 }
@@ -143,17 +145,76 @@ function validateAndFixSchema(
  * Convert n8n AI Tool to our internal format
  */
 export function convertN8nToolToInternal(tool: N8nAITool): ConvertedTool {
-	// Case 1: Tool already in our format (has name, description, schema, call)
-	if (tool.name && tool.description && tool.schema && tool.call) {
+	// Case 1: LangChain Tool wrapped by logWrapper (has _call method)
+	// This is the most common case for n8n built-in tools like Calculator, Code Tool, etc.
+	if (tool._call && typeof tool._call === 'function') {
+		// Determine the appropriate default schema based on tool name
+		let defaultSchema = {
+			type: 'object',
+			properties: {
+				input: {
+					type: 'string',
+					description: 'Tool input',
+				},
+			},
+			required: ['input'],
+		};
+
+		// Calculator-specific schema
+		if (tool.name && tool.name.toLowerCase().includes('calculator')) {
+			defaultSchema = {
+				type: 'object',
+				properties: {
+					input: {
+						type: 'string',
+						description: 'A mathematical expression to evaluate (e.g., "2+2", "10*5", "sqrt(16)")',
+					},
+				},
+				required: ['input'],
+			};
+		}
+
+		return {
+			name: normalizeToolName(tool.name),
+			description: tool.description || 'No description provided',
+			schema: validateAndFixSchema(tool.schema || defaultSchema),
+			call: async (args: Record<string, unknown>) => {
+				// LangChain tools wrapped by logWrapper expect string input
+				// Try to extract the actual query/expression from args
+				let input: string;
+
+				if (typeof args === 'string') {
+					input = args;
+				} else if (args.input && typeof args.input === 'string') {
+					input = args.input;
+				} else if (args.query && typeof args.query === 'string') {
+					input = args.query;
+				} else if (args.expression && typeof args.expression === 'string') {
+					input = args.expression;
+				} else if (args.question && typeof args.question === 'string') {
+					input = args.question;
+				} else {
+					// If we can't find a string field, use the first string value or JSON stringify
+					const firstStringValue = Object.values(args).find((v) => typeof v === 'string');
+					input = (firstStringValue as string) || JSON.stringify(args);
+				}
+
+				return await tool._call!(input);
+			},
+		};
+	}
+
+	// Case 2: Tool has call method (custom n8n AI tools)
+	if (tool.name && tool.description && tool.call && typeof tool.call === 'function') {
 		return {
 			name: normalizeToolName(tool.name),
 			description: tool.description,
-			schema: validateAndFixSchema(tool.schema),
+			schema: validateAndFixSchema(tool.schema), // schema can be undefined
 			call: tool.call,
 		};
 	}
 
-	// Case 2: LangChain DynamicTool format (has func instead of call)
+	// Case 3: LangChain DynamicTool format (has func instead of call)
 	if (tool.func && typeof tool.func === 'function') {
 		return {
 			name: normalizeToolName(tool.name),
@@ -178,7 +239,7 @@ export function convertN8nToolToInternal(tool: N8nAITool): ConvertedTool {
 		};
 	}
 
-	// Case 3: MCP Toolkit format (from McpClientTool)
+	// Case 4: MCP Toolkit format (from McpClientTool)
 	// McpToolkit wraps multiple tools, need to extract individual tools
 	if ('getTools' in tool && typeof (tool as { getTools?: () => unknown }).getTools === 'function') {
 		// This is a toolkit, not a single tool
@@ -186,7 +247,7 @@ export function convertN8nToolToInternal(tool: N8nAITool): ConvertedTool {
 		throw new Error('Toolkit detected, should be unwrapped before conversion');
 	}
 
-	// Case 4: Generic tool with invoke method
+	// Case 5: Generic tool with invoke method
 	if (
 		'invoke' in tool &&
 		typeof (tool as { invoke?: (args: unknown) => unknown }).invoke === 'function'
@@ -273,25 +334,25 @@ export function convertN8nToolsToInternal(tools: N8nAITool[]): ConvertedTool[] {
 /**
  * Create a wrapper for n8n connected tools that logs execution
  */
-export function createLoggedToolWrapper(
-	tool: ConvertedTool,
-	executeFunctions: IExecuteFunctions,
-): ConvertedTool {
+export function createLoggedToolWrapper(tool: ConvertedTool, logger: Logger): ConvertedTool {
 	const originalCall = tool.call;
 
 	return {
 		...tool,
 		call: async (args: Record<string, unknown>) => {
-			const logger = executeFunctions.logger;
 			logger.debug(`🔧 Calling external tool: ${tool.name}`);
-			logger.debug(`   Arguments: ${JSON.stringify(args).substring(0, 200)}`);
+			logger.debug(`   Arguments (raw): ${JSON.stringify(args).substring(0, 200)}`);
 
 			try {
 				const result = await originalCall(args);
 				logger.debug(`   ✅ Tool ${tool.name} completed successfully`);
+				logger.debug(
+					`   Result: ${typeof result === 'string' ? result.substring(0, 200) : JSON.stringify(result).substring(0, 200)}`,
+				);
 				return result;
 			} catch (error) {
 				logger.error(`   ❌ Tool ${tool.name} failed: ${(error as Error).message}`);
+				logger.error(`   Error stack: ${(error as Error).stack}`);
 				throw error;
 			}
 		},
