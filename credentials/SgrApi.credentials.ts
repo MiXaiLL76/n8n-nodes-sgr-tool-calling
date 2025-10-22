@@ -5,10 +5,11 @@ import {
 	INodeProperties,
 } from 'n8n-workflow';
 
-export class SGR implements ICredentialType {
-	name = 'SGR';
+export class SgrApi implements ICredentialType {
+	name = 'sgrApi';
 	displayName = 'SGR OpenAI API';
 	documentationUrl = 'https://platform.openai.com/docs/api-reference';
+	icon = 'file:SGR.svg' as const;
 	properties: INodeProperties[] = [
 		{
 			displayName: 'API Key',

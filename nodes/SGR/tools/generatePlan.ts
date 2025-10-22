@@ -31,7 +31,8 @@ Useful to split complex request into manageable steps.`,
 		},
 		required: ['reasoning', 'research_goal', 'planned_steps', 'search_strategies'],
 	},
-	call: async (args: any) => {
+	call: async (args: Record<string, unknown>) => {
+		// eslint-disable-next-line @typescript-eslint/no-unused-vars
 		const { reasoning, ...output } = args;
 		return JSON.stringify(output, null, 2);
 	},

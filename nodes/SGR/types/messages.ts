@@ -9,11 +9,11 @@ export interface ToolCall {
 	// OpenAI format
 	function?: {
 		name: string;
-		arguments: string | Record<string, any>;
+		arguments: string | Record<string, unknown>;
 	};
 	// n8n format
 	name?: string;
-	args?: any;
+	args?: Record<string, unknown>;
 }
 
 export interface Message {

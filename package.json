@@ -1,19 +1,22 @@
 {
 	"name": "n8n-nodes-sgr-tool-calling",
 	"version": "0.1.0",
-	"description": "",
+	"description": "n8n node for SGR AI Agent with Tool Calling capabilities and Tavily Search integration",
 	"license": "MIT",
 	"homepage": "",
 	"keywords": [
-		"n8n-community-node-package"
+		"n8n-community-node-package",
+		"sgr-tool-calling",
+		"tool-calling",
+		"sgr"
 	],
 	"author": {
-		"name": "",
-		"email": ""
+		"name": "MiXaiLL76",
+		"email": "mike.milos@yandex.ru"
 	},
 	"repository": {
 		"type": "git",
-		"url": "https://github.com/<...>/n8n-nodes-<...>.git"
+		"url": "https://github.com/MiXaiLL76/sgr_tool_calling.git"
 	},
 	"scripts": {
 		"build": "n8n-node build",
@@ -31,12 +34,12 @@
 		"n8nNodesApiVersion": 1,
 		"strict": true,
 		"credentials": [
-			"dist/credentials/SGR.credentials.js",
+			"dist/credentials/SgrApi.credentials.js",
 			"dist/credentials/TavilyApi.credentials.js"
 		],
 		"nodes": [
-			"dist/nodes/SGR/SGR.node.js",
-			"dist/nodes/SGRTavilySearchTool/SGRTavilySearchTool.node.js"
+			"dist/nodes/SGR/SgrToolCalling.node.js",
+			"dist/nodes/SGRTavilySearchTool/SgrTavilySearchTool.node.js"
 		]
 	},
 	"devDependencies": {

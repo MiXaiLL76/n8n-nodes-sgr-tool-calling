@@ -9,6 +9,7 @@ export class TavilyApi implements ICredentialType {
 	name = 'tavilyApi';
 	displayName = 'Tavily API';
 	documentationUrl = 'https://tavily.com/';
+	icon = 'file:tavily.svg' as const;
 	properties: INodeProperties[] = [
 		{
 			displayName: 'API Key',

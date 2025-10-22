@@ -32,13 +32,13 @@ Citations must be integrated directly into sentences, not just listed at the end
 		},
 		required: ['reasoning', 'title', 'user_request_language_reference', 'content', 'confidence'],
 	},
-	call: async (args: any) => {
+	call: async (args: Record<string, unknown>) => {
 		return JSON.stringify(
 			{
 				title: args.title,
 				content: args.content,
 				confidence: args.confidence,
-				word_count: args.content.split(/\s+/).length,
+				word_count: (args.content as string).split(/\s+/).length,
 				timestamp: new Date().toISOString(),
 			},
 			null,

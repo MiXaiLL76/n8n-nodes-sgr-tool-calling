@@ -5,7 +5,7 @@ import {
 	type SupplyData,
 } from 'n8n-workflow';
 
-export class SGRTavilySearchTool implements INodeType {
+export class SgrTavilySearchTool implements INodeType {
 	description: INodeTypeDescription = {
 		displayName: 'SGR Tavily Search Tool',
 		name: 'sgrTavilySearchTool',
@@ -13,6 +13,7 @@ export class SGRTavilySearchTool implements INodeType {
 		group: ['transform'],
 		version: 1,
 		description: 'Web search tool using Tavily API for SGR Agent',
+		usableAsTool: true,
 		defaults: {
 			name: 'SGR Tavily Search',
 		},
@@ -127,7 +128,10 @@ Returns: Page titles, URLs, snippets, and optionally a summarized answer`,
 						},
 					});
 
-					const data = response as any;
+					const data = response as {
+						answer?: string;
+						results?: Array<{ title: string; url: string; content?: string }>;
+					};
 
 					// Format the response
 					let formattedResult = `Search Query: ${query}\n\n`;
@@ -139,7 +143,7 @@ Returns: Page titles, URLs, snippets, and optionally a summarized answer`,
 					formattedResult += 'Search Results:\n\n';
 
 					if (data.results && Array.isArray(data.results)) {
-						data.results.forEach((result: any, index: number) => {
+						data.results.forEach((result, index: number) => {
 							formattedResult += `[${index + 1}] ${result.title}\n`;
 							formattedResult += `URL: ${result.url}\n`;
 							if (result.content) {

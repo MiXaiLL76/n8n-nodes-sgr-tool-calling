@@ -24,7 +24,7 @@ export class AgentContext {
 		this.executionLog = [];
 	}
 
-	logToolCall(toolName: string, args: any): void {
+	logToolCall(toolName: string, args: Record<string, unknown>): void {
 		this.executionLog.push({
 			iteration: this.iteration,
 			timestamp: new Date().toISOString(),
@@ -34,7 +34,7 @@ export class AgentContext {
 		});
 	}
 
-	logToolResult(toolName: string, result: any): void {
+	logToolResult(toolName: string, result: unknown): void {
 		this.executionLog.push({
 			iteration: this.iteration,
 			timestamp: new Date().toISOString(),
