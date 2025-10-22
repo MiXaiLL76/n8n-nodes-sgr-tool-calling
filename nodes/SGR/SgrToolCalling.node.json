@@ -1,5 +1,5 @@
 {
-	"node": "n8n-nodes-sgr-tool-calling.sgr",
+	"node": "n8n-nodes-sgr-tool-calling.sgrToolCalling",
 	"nodeVersion": "1.0",
 	"codexVersion": "1.0",
 	"categories": ["AI"],
@@ -9,7 +9,7 @@
 	"resources": {
 		"primaryDocumentation": [
 			{
-				"url": "https://github.com/vamplabAI/sgr-deep-research"
+				"url": "https://github.com/MiXaiLL76/sgr_tool_calling"
 			}
 		]
 	}

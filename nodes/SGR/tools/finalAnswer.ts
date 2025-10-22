@@ -30,7 +30,7 @@ Usage: Call after you complete research task`,
 		},
 		required: ['reasoning', 'completed_steps', 'answer', 'status'],
 	},
-	call: async (args: any) => {
+	call: async (args: Record<string, unknown>) => {
 		return JSON.stringify(args, null, 2);
 	},
 };

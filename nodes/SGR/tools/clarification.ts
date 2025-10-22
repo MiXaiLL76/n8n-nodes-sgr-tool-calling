@@ -35,7 +35,7 @@ Keep all fields concise - brief reasoning, short terms, and clear questions.`,
 		},
 		required: ['reasoning', 'unclear_terms', 'assumptions', 'questions'],
 	},
-	call: async (args: any) => {
-		return args.questions.join('\n');
+	call: async (args: Record<string, unknown>) => {
+		return (args.questions as string[]).join('\n');
 	},
 };

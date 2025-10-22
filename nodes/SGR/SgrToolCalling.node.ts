@@ -1,6 +1,7 @@
 import {
 	NodeConnectionTypes,
 	NodeOperationError,
+	type IDataObject,
 	type IExecuteFunctions,
 	type INodeExecutionData,
 	type INodeType,
@@ -8,8 +9,12 @@ import {
 } from 'n8n-workflow';
 
 import { ToolCallingAgent } from './agents';
-import type { AgentConfig } from './agents/BaseAgent';
-import { convertN8nToolsToInternal, createLoggedToolWrapper } from './core/toolConverter';
+import type { AgentConfig, AdditionalToolConfig } from './agents/BaseAgent';
+import {
+	convertN8nToolsToInternal,
+	createLoggedToolWrapper,
+	type N8nAITool,
+} from './core/toolConverter';
 import {
 	DEFAULT_SYSTEM_PROMPT,
 	DEFAULT_INITIAL_USER_REQUEST,
@@ -22,7 +27,48 @@ import {
 	handleClearCommand,
 } from './core/commands';
 
-export class SGR implements INodeType {
+// Type definitions for n8n AI components
+interface N8nAiLanguageModel {
+	invoke: (messages: unknown[]) => Promise<unknown>;
+	[key: string]: unknown;
+}
+
+interface N8nAiTool {
+	name: string;
+	description: string;
+	schema?: unknown;
+	call?: (args: unknown) => Promise<unknown>;
+	[key: string]: unknown;
+}
+
+interface N8nAiMemory {
+	getChatMessages?: () => Promise<unknown[]>;
+	addMessage?: (message: unknown) => Promise<void>;
+	clear?: () => Promise<void>;
+	[key: string]: unknown;
+}
+
+interface BuiltInToolsConfig {
+	enableReasoning?: boolean;
+	enableFinalAnswer?: boolean;
+	enableCreateReport?: boolean;
+	enableClarification?: boolean;
+	enableGeneratePlan?: boolean;
+	enableAdaptPlan?: boolean;
+}
+
+interface PromptsConfig {
+	systemPrompt?: string;
+	initialUserRequest?: string;
+	clarificationResponse?: string;
+}
+
+interface OptionsConfig {
+	returnFullLog?: boolean;
+	answerOnly?: boolean;
+}
+
+export class SgrToolCalling implements INodeType {
 	description: INodeTypeDescription = {
 		displayName: 'SGR Agent',
 		name: 'sgrToolCalling',
@@ -31,6 +77,7 @@ export class SGR implements INodeType {
 		version: 1,
 		subtitle: 'AI Agent with Tool Calling',
 		description: 'SGR Research Agent with OpenAI Tool Calling',
+		usableAsTool: true,
 		defaults: {
 			name: 'SGR Agent',
 		},
@@ -73,46 +120,46 @@ export class SGR implements INodeType {
 				description: 'Enable or disable built-in SGR tools',
 				options: [
 					{
-						displayName: 'Reasoning Tool',
-						name: 'enableReasoning',
+						displayName: 'Adapt Plan Tool',
+						name: 'enableAdaptPlan',
 						type: 'boolean',
 						default: true,
-						description: 'Agent core reasoning tool for determining next steps',
-					},
-					{
-						displayName: 'Final Answer Tool',
-						name: 'enableFinalAnswer',
-						type: 'boolean',
-						default: true,
-						description: 'Tool to finalize research and complete execution',
-					},
-					{
-						displayName: 'Create Report Tool',
-						name: 'enableCreateReport',
-						type: 'boolean',
-						default: true,
-						description: 'Tool to create comprehensive reports with citations',
+						description: 'Whether to enable tool to adapt research plans based on findings',
 					},
 					{
 						displayName: 'Clarification Tool',
 						name: 'enableClarification',
 						type: 'boolean',
 						default: true,
-						description: 'Tool to ask clarifying questions',
+						description: 'Whether to enable tool to ask clarifying questions',
+					},
+					{
+						displayName: 'Create Report Tool',
+						name: 'enableCreateReport',
+						type: 'boolean',
+						default: true,
+						description: 'Whether to enable tool to create comprehensive reports with citations',
+					},
+					{
+						displayName: 'Final Answer Tool',
+						name: 'enableFinalAnswer',
+						type: 'boolean',
+						default: true,
+						description: 'Whether to enable tool to finalize research and complete execution',
 					},
 					{
 						displayName: 'Generate Plan Tool',
 						name: 'enableGeneratePlan',
 						type: 'boolean',
 						default: true,
-						description: 'Tool to generate research plans',
+						description: 'Whether to enable tool to generate research plans',
 					},
 					{
-						displayName: 'Adapt Plan Tool',
-						name: 'enableAdaptPlan',
+						displayName: 'Reasoning Tool',
+						name: 'enableReasoning',
 						type: 'boolean',
 						default: true,
-						description: 'Tool to adapt research plans based on findings',
+						description: 'Whether to enable agent core reasoning tool for determining next steps',
 					},
 				],
 			},
@@ -156,7 +203,7 @@ export class SGR implements INodeType {
 						type: 'string',
 						default: DEFAULT_SYSTEM_PROMPT,
 						description:
-							'Main system prompt for the agent. Default value from nodes/SGR/prompts/index.ts',
+							'Main system prompt for the agent. Default value from nodes/SGR/prompts/index.ts.',
 						typeOptions: {
 							rows: 10,
 						},
@@ -167,7 +214,7 @@ export class SGR implements INodeType {
 						type: 'string',
 						default: DEFAULT_INITIAL_USER_REQUEST,
 						description:
-							'Template for initial user request from nodes/SGR/prompts/index.ts. Use {task} and {current_date} placeholders',
+							'Template for initial user request from nodes/SGR/prompts/index.ts. Use {task} and {current_date} placeholders.',
 						typeOptions: {
 							rows: 5,
 						},
@@ -178,7 +225,7 @@ export class SGR implements INodeType {
 						type: 'string',
 						default: DEFAULT_CLARIFICATION_RESPONSE,
 						description:
-							'Template for clarification responses from nodes/SGR/prompts/index.ts. Use {clarifications} and {current_date} placeholders',
+							'Template for clarification responses from nodes/SGR/prompts/index.ts. Use {clarifications} and {current_date} placeholders.',
 						typeOptions: {
 							rows: 5,
 						},
@@ -247,7 +294,8 @@ export class SGR implements INodeType {
 						name: 'answerOnly',
 						type: 'boolean',
 						default: false,
-						description: 'Return only the answer text without metadata (useful for chat responses)',
+						description:
+							'Whether to return only the answer text without metadata (useful for chat responses)',
 					},
 				],
 			},
@@ -262,7 +310,7 @@ export class SGR implements INodeType {
 		const aiModel = (await this.getInputConnectionData(
 			NodeConnectionTypes.AiLanguageModel,
 			0,
-		)) as any;
+		)) as N8nAiLanguageModel;
 
 		if (!aiModel) {
 			throw new NodeOperationError(
@@ -273,10 +321,9 @@ export class SGR implements INodeType {
 
 		// Get connected AI Tools (like Tavily Search, MCP, LangChain tools, etc.)
 		// Note: n8n automatically highlights tool nodes when they execute via call()
-		const rawConnectedTools = (await this.getInputConnectionData(
-			NodeConnectionTypes.AiTool,
-			0,
-		)) as any[];
+		const rawConnectedTools = (await this.getInputConnectionData(NodeConnectionTypes.AiTool, 0)) as
+			| N8nAiTool[]
+			| undefined;
 
 		// Track session ID changes to clear memory when needed
 		let lastSessionId: string | undefined;
@@ -292,7 +339,7 @@ export class SGR implements INodeType {
 			const memory = (await this.getInputConnectionData(
 				NodeConnectionTypes.AiMemory,
 				itemIndex,
-			)) as any;
+			)) as N8nAiMemory | undefined;
 
 			if (memory) {
 				this.logger.debug(`💾 Memory connected for this item`);
@@ -343,7 +390,7 @@ export class SGR implements INodeType {
 					enableClarification: true,
 					enableGeneratePlan: true,
 					enableAdaptPlan: true,
-				}) as any;
+				}) as BuiltInToolsConfig;
 				const maxIterations = this.getNodeParameter('maxIterations', itemIndex) as number;
 				const maxSearches = this.getNodeParameter('maxSearches', itemIndex) as number;
 				const maxClarifications = this.getNodeParameter('maxClarifications', itemIndex) as number;
@@ -351,15 +398,15 @@ export class SGR implements INodeType {
 					systemPrompt: DEFAULT_SYSTEM_PROMPT,
 					initialUserRequest: DEFAULT_INITIAL_USER_REQUEST,
 					clarificationResponse: DEFAULT_CLARIFICATION_RESPONSE,
-				}) as any;
+				}) as PromptsConfig;
 				const additionalTools = this.getNodeParameter('additionalTools', itemIndex, {
 					tools: [],
-				}) as any;
-				const options = this.getNodeParameter('options', itemIndex, {}) as any;
+				}) as { tools: unknown[] };
+				const options = this.getNodeParameter('options', itemIndex, {}) as OptionsConfig;
 
 				// Convert connected tools to internal format
 				const connectedTools = rawConnectedTools
-					? convertN8nToolsToInternal(rawConnectedTools).map((tool) =>
+					? convertN8nToolsToInternal(rawConnectedTools as unknown as N8nAITool[]).map((tool) =>
 							createLoggedToolWrapper(tool, this),
 						)
 					: [];
@@ -378,7 +425,7 @@ export class SGR implements INodeType {
 					maxSearches,
 					maxClarifications,
 					builtInTools,
-					additionalTools: additionalTools.tools || [],
+					additionalTools: (additionalTools.tools as AdditionalToolConfig[]) || [],
 					connectedTools,
 					memory: memory || undefined,
 				};
@@ -388,17 +435,22 @@ export class SGR implements INodeType {
 
 				// Handle /help command
 				if (commandName === 'help') {
-					return handleHelpCommand(itemIndex, options.answerOnly);
+					return handleHelpCommand(itemIndex, options.answerOnly || false);
 				}
 
 				// Handle /tools command
 				if (commandName === 'tools') {
-					return handleToolsCommand(this, config, aiModel, itemIndex, options.answerOnly);
+					return handleToolsCommand(this, config, aiModel, itemIndex, options.answerOnly || false);
 				}
 
 				// Handle /clear or /new command
 				if (commandName === 'clear') {
-					return await handleClearCommand(memory, this.logger, itemIndex, options.answerOnly);
+					return await handleClearCommand(
+						memory,
+						this.logger,
+						itemIndex,
+						options.answerOnly || false,
+					);
 				}
 
 				// Handle clearMemory via JSON input (for compatibility)
@@ -429,7 +481,7 @@ export class SGR implements INodeType {
 				await agent.saveToMemory();
 
 				// Get agent output
-				const output = agent.getOutput();
+				const output = agent.getOutput() as IDataObject;
 
 				// Filter output based on options
 				if (!options.returnFullLog) {
@@ -438,7 +490,7 @@ export class SGR implements INodeType {
 				}
 
 				// Return only answer text if answerOnly option is enabled
-				if (options.answerOnly) {
+				if (options.answerOnly || false) {
 					returnData.push({
 						json: {
 							message: output.answer || output.final_message || '',

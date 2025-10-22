@@ -48,7 +48,7 @@ Usage: Required tool use this tool before execution tool, and after execution`,
 			'task_completed',
 		],
 	},
-	call: async (args: any) => {
+	call: async (args: Record<string, unknown>) => {
 		return JSON.stringify(args, null, 2);
 	},
 };

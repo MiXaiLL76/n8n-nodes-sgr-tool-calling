@@ -18,6 +18,6 @@ export interface ExecutionLogEntry {
 	timestamp?: string;
 	type: 'tool_call' | 'tool_result' | 'reasoning';
 	tool?: string;
-	arguments?: any;
-	result?: any;
+	arguments?: Record<string, unknown>;
+	result?: unknown;
 }

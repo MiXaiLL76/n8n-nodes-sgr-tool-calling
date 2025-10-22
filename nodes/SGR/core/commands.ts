@@ -3,7 +3,7 @@
  * Handles /help, /tools, /clear, /new commands
  */
 
-import type { IExecuteFunctions } from 'n8n-workflow';
+import type { IExecuteFunctions, INodeExecutionData, IDataObject } from 'n8n-workflow';
 import type { AgentConfig } from '../agents/BaseAgent';
 import { ToolCallingAgent } from '../agents';
 
@@ -37,27 +37,20 @@ export const CLEAR_MESSAGE = `Chat history has been cleared. Starting fresh!
 
 Type **/tools** to see available tools.`;
 
-interface CommandResult {
-	json: any;
-	binary?: any;
-	pairedItem: { item: number };
-	[key: string]: any;
-}
-
 /**
  * Handle /help command
  */
-export function handleHelpCommand(itemIndex: number, answerOnly: boolean): CommandResult[][] {
+export function handleHelpCommand(itemIndex: number, answerOnly: boolean): INodeExecutionData[][] {
 	return [
 		[
 			{
-				json: answerOnly
+				json: (answerOnly
 					? { message: HELP_MESSAGE }
 					: {
 							task: 'Show help',
 							state: 'INFO',
 							answer: HELP_MESSAGE,
-						},
+						}) as IDataObject,
 				pairedItem: { item: itemIndex },
 			},
 		],
@@ -70,10 +63,10 @@ export function handleHelpCommand(itemIndex: number, answerOnly: boolean): Comma
 export function handleToolsCommand(
 	executeFunctions: IExecuteFunctions,
 	config: AgentConfig,
-	aiModel: any,
+	aiModel: { invoke: (messages: unknown[]) => Promise<unknown>; [key: string]: unknown },
 	itemIndex: number,
 	answerOnly: boolean,
-): CommandResult[][] {
+): INodeExecutionData[][] {
 	// Get all tools that would be available
 	const tempAgent = new ToolCallingAgent(executeFunctions, config, aiModel);
 	const availableTools = tempAgent['prepareTools'](); // Access protected method
@@ -131,7 +124,7 @@ export function handleToolsCommand(
 	return [
 		[
 			{
-				json: toolsOutput,
+				json: toolsOutput as IDataObject,
 				pairedItem: { item: itemIndex },
 			},
 		],
@@ -142,11 +135,11 @@ export function handleToolsCommand(
  * Handle /clear or /new command
  */
 export async function handleClearCommand(
-	memory: any,
-	logger: any,
+	memory: { clear?: () => Promise<void>; [key: string]: unknown } | undefined,
+	logger: { info: (msg: string) => void; warn: (msg: string) => void },
 	itemIndex: number,
 	answerOnly: boolean,
-): Promise<CommandResult[][]> {
+): Promise<INodeExecutionData[][]> {
 	try {
 		if (memory && typeof memory.clear === 'function') {
 			await memory.clear();
