@@ -41,6 +41,70 @@ function normalizeToolName(name: string): string {
 }
 
 /**
+ * Extract JSON Schema from Zod schema
+ * Zod schemas have _def property with the actual schema definition
+ */
+function extractSchemaFromZod(zodSchema: unknown): Record<string, unknown> | null {
+	if (!zodSchema || typeof zodSchema !== 'object') {
+		return null;
+	}
+
+	// Check if it's a Zod schema with _def
+	const schema = zodSchema as any;
+	if (schema._def) {
+		// Try to use zodToJsonSchema if available, otherwise extract manually
+		const def = schema._def;
+
+		// For ZodObject, extract shape
+		if (def.typeName === 'ZodObject' && def.shape) {
+			const properties: Record<string, unknown> = {};
+			const required: string[] = [];
+
+			for (const [key, value] of Object.entries(def.shape() || def.shape)) {
+				const fieldDef = (value as any)._def;
+
+				// Extract field info
+				const fieldSchema: Record<string, unknown> = {};
+
+				// Determine type
+				if (fieldDef.typeName === 'ZodString') {
+					fieldSchema.type = 'string';
+				} else if (fieldDef.typeName === 'ZodNumber') {
+					fieldSchema.type = 'number';
+				} else if (fieldDef.typeName === 'ZodBoolean') {
+					fieldSchema.type = 'boolean';
+				} else if (fieldDef.typeName === 'ZodArray') {
+					fieldSchema.type = 'array';
+				} else if (fieldDef.typeName === 'ZodObject') {
+					fieldSchema.type = 'object';
+				}
+
+				// Check if optional
+				const isOptional = fieldDef.typeName === 'ZodOptional' || fieldDef.isOptional;
+				if (!isOptional) {
+					required.push(key);
+				}
+
+				// Add description if available
+				if (fieldDef.description) {
+					fieldSchema.description = fieldDef.description;
+				}
+
+				properties[key] = fieldSchema;
+			}
+
+			return {
+				type: 'object',
+				properties,
+				required: required.length > 0 ? required : undefined,
+			};
+		}
+	}
+
+	return null;
+}
+
+/**
  * Clean up schema by removing library-specific metadata fields
  * Removes Zod internal fields: _def, _cached, ~standard, etc.
  */
@@ -49,8 +113,14 @@ function cleanSchemaMetadata(schema: unknown): Record<string, unknown> {
 		return schema as Record<string, unknown>;
 	}
 
+	// First, try to extract from Zod
+	const zodExtracted = extractSchemaFromZod(schema);
+	if (zodExtracted) {
+		return zodExtracted;
+	}
+
 	// List of metadata keys to remove (Zod, other libraries)
-	const metadataKeys = ['_def', '_cached', '~standard', '_type', '_output', '_input'];
+	const metadataKeys = ['_def', '_cached', '~standard', '_type', '_output', '_input', 'parse'];
 
 	// Create clean copy without metadata
 	const cleaned: Record<string, unknown> = {};
@@ -145,9 +215,75 @@ function validateAndFixSchema(
  * Convert n8n AI Tool to our internal format
  */
 export function convertN8nToolToInternal(tool: N8nAITool): ConvertedTool {
+	console.log(`[toolConverter] Converting tool: ${tool.name}`);
+	console.log(`[toolConverter]   Has _call: ${!!tool._call}`);
+	console.log(`[toolConverter]   Has call: ${!!tool.call}`);
+	console.log(`[toolConverter]   Has func: ${!!tool.func}`);
+	console.log(`[toolConverter]   Has invoke: ${!!('invoke' in tool)}`);
+	console.log(`[toolConverter]   Has getTools: ${!!('getTools' in tool)}`);
+
 	// Case 1: LangChain Tool wrapped by logWrapper (has _call method)
 	// This is the most common case for n8n built-in tools like Calculator, Code Tool, etc.
+	// IMPORTANT: Check if it's also a DynamicStructuredTool (has both _call and func with Zod schema)
+	// MCP tools are wrapped by logWrapper, so they have _call, but also have func and schema
 	if (tool._call && typeof tool._call === 'function') {
+		// Check if this is a wrapped DynamicStructuredTool (MCP tools)
+		const hasFunc = tool.func && typeof tool.func === 'function';
+		const hasZodSchema =
+			tool.schema &&
+			typeof tool.schema === 'object' &&
+			('_def' in tool.schema || 'parse' in tool.schema);
+
+		console.log(`[toolConverter] Tool ${tool.name} has _call method`);
+		console.log(`[toolConverter]   Also has func: ${hasFunc}`);
+		console.log(`[toolConverter]   Also has Zod schema: ${hasZodSchema}`);
+
+		// If it has both _call and func with Zod schema, it's a wrapped DynamicStructuredTool
+		if (hasFunc && hasZodSchema) {
+			console.log(`[toolConverter]   -> Treating as wrapped DynamicStructuredTool (MCP tool)`);
+			const zodSchema = tool.schema as { parse?: (args: unknown) => unknown };
+			const toolName = normalizeToolName(tool.name);
+
+			const extractedSchema = validateAndFixSchema(tool.schema);
+			console.log(
+				`[toolConverter]   Extracted schema:`,
+				JSON.stringify(extractedSchema, null, 2),
+			);
+
+			return {
+				name: toolName,
+				description: tool.description || 'No description provided',
+				schema: extractedSchema,
+				call: async (args: Record<string, unknown>) => {
+					// Debug: log what we're about to call the tool with
+					console.log(`[toolConverter] Calling wrapped DynamicStructuredTool ${toolName}:`);
+					console.log(`[toolConverter]   args:`, JSON.stringify(args, null, 2));
+
+					// IMPORTANT: Don't use _call! The logWrapper's _call expects a string.
+					// Instead, use func or invoke which expect objects for DynamicStructuredTool
+					if (tool.func) {
+						console.log(`[toolConverter]   Using tool.func (bypassing logWrapper)`);
+
+						// Call tool.func directly without Zod validation
+						// The tool's internal implementation will handle validation
+						// Zod validation can be too strict (e.g., strict mode rejects extra fields)
+						// while our JSON schema might allow them
+						return await tool.func!(args);
+					} else if ('invoke' in tool && typeof tool.invoke === 'function') {
+						console.log(`[toolConverter]   Using tool.invoke`);
+						return await (tool as any).invoke(args);
+					} else {
+						// Fallback to _call (shouldn't happen for MCP tools)
+						console.log(`[toolConverter]   WARNING: Falling back to _call (may fail)`);
+						return await tool._call!(args as any);
+					}
+				},
+			};
+		}
+
+		// Regular tool with _call that expects string input
+		console.log(`[toolConverter]   -> Treating as regular string-based tool`);
+
 		// Determine the appropriate default schema based on tool name
 		let defaultSchema = {
 			type: 'object',
@@ -215,7 +351,65 @@ export function convertN8nToolToInternal(tool: N8nAITool): ConvertedTool {
 	}
 
 	// Case 3: LangChain DynamicTool format (has func instead of call)
+	// This includes both DynamicTool (string input) and DynamicStructuredTool (object input)
 	if (tool.func && typeof tool.func === 'function') {
+		// Check if it's a DynamicStructuredTool (has Zod schema that expects object)
+		// MCP tools from @n8n/n8n-nodes-langchain.mcpClientTool use DynamicStructuredTool
+		// They have Zod schemas and expect object arguments, not strings
+		const hasZodSchema =
+			tool.schema &&
+			typeof tool.schema === 'object' &&
+			('_def' in tool.schema || 'parse' in tool.schema);
+
+		console.log(`[toolConverter] Converting tool with func: ${tool.name}`);
+		console.log(`[toolConverter]   Has schema: ${!!tool.schema}`);
+		console.log(`[toolConverter]   Schema type: ${typeof tool.schema}`);
+		console.log(`[toolConverter]   Has _def: ${tool.schema && '_def' in tool.schema}`);
+		console.log(`[toolConverter]   Has parse: ${tool.schema && 'parse' in tool.schema}`);
+		console.log(`[toolConverter]   Is structured tool: ${hasZodSchema}`);
+
+		const isStructuredTool = hasZodSchema;
+
+		if (isStructuredTool) {
+			// DynamicStructuredTool - func expects object, not string
+			// MCP tools and other structured tools with Zod schemas
+			const zodSchema = tool.schema as { parse?: (args: unknown) => unknown };
+			const toolName = normalizeToolName(tool.name);
+
+			return {
+				name: toolName,
+				description: tool.description || 'No description provided',
+				schema: validateAndFixSchema(tool.schema),
+				call: async (args: Record<string, unknown>) => {
+					// Debug: log what we're about to call the tool with
+					console.log(`[toolConverter] DynamicStructuredTool ${toolName}:`);
+					console.log(`[toolConverter]   args type: ${typeof args}`);
+					console.log(`[toolConverter]   args keys: ${Object.keys(args).join(', ')}`);
+					console.log(`[toolConverter]   args value:`, JSON.stringify(args, null, 2));
+
+					// If schema has parse method (Zod), validate/transform args
+					let validatedArgs = args;
+					if (zodSchema.parse && typeof zodSchema.parse === 'function') {
+						try {
+							console.log(`[toolConverter]   Validating with Zod schema...`);
+							validatedArgs = zodSchema.parse(args) as Record<string, unknown>;
+							console.log(`[toolConverter]   Validation successful`);
+						} catch (error) {
+							console.log(`[toolConverter]   Validation failed:`, error);
+							// If validation fails, try to pass args as-is
+							// Some tools might be more lenient
+							validatedArgs = args;
+						}
+					}
+
+					// Pass args directly as object
+					console.log(`[toolConverter]   Calling tool.func with:`, JSON.stringify(validatedArgs, null, 2));
+					return await tool.func!(validatedArgs);
+				},
+			};
+		}
+
+		// Regular DynamicTool - func expects string input
 		return {
 			name: normalizeToolName(tool.name),
 			description: tool.description || 'No description provided',
@@ -332,6 +526,21 @@ export function convertN8nToolsToInternal(tools: N8nAITool[]): ConvertedTool[] {
 }
 
 /**
+ * Safely stringify and truncate data for logging
+ */
+function safeStringify(data: unknown, maxLength: number = 500): string {
+	try {
+		const str = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
+		if (str.length <= maxLength) {
+			return str;
+		}
+		return str.substring(0, maxLength) + `... (truncated, total length: ${str.length})`;
+	} catch (error) {
+		return `[Unable to stringify: ${(error as Error).message}]`;
+	}
+}
+
+/**
  * Create a wrapper for n8n connected tools that logs execution
  */
 export function createLoggedToolWrapper(tool: ConvertedTool, logger: Logger): ConvertedTool {
@@ -341,18 +550,29 @@ export function createLoggedToolWrapper(tool: ConvertedTool, logger: Logger): Co
 		...tool,
 		call: async (args: Record<string, unknown>) => {
 			logger.debug(`🔧 Calling external tool: ${tool.name}`);
-			logger.debug(`   Arguments (raw): ${JSON.stringify(args).substring(0, 200)}`);
+			logger.debug(`   Tool schema type: ${tool.schema?.type || 'unknown'}`);
+			logger.debug(`   Arguments (type): ${typeof args}`);
+			logger.debug(`   Arguments (full):\n${safeStringify(args, 1000)}`);
 
 			try {
 				const result = await originalCall(args);
 				logger.debug(`   ✅ Tool ${tool.name} completed successfully`);
-				logger.debug(
-					`   Result: ${typeof result === 'string' ? result.substring(0, 200) : JSON.stringify(result).substring(0, 200)}`,
-				);
+				logger.debug(`   Result type: ${typeof result}`);
+				logger.debug(`   Result (preview):\n${safeStringify(result, 500)}`);
 				return result;
 			} catch (error) {
-				logger.error(`   ❌ Tool ${tool.name} failed: ${(error as Error).message}`);
-				logger.error(`   Error stack: ${(error as Error).stack}`);
+				const errorMessage = (error as Error).message || String(error);
+				const errorStack = (error as Error).stack || '';
+
+				logger.error(`   ❌ Tool ${tool.name} failed`);
+				logger.error(`   Error message: ${errorMessage}`);
+				if (errorStack) {
+					logger.error(`   Error stack:\n${errorStack}`);
+				}
+
+				// Log full error object for debugging
+				logger.error(`   Full error:\n${safeStringify(error, 1000)}`);
+
 				throw error;
 			}
 		},
