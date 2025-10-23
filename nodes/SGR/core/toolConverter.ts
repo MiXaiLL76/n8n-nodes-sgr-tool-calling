@@ -52,15 +52,27 @@ function extractSchemaFromZod(zodSchema: unknown): Record<string, unknown> | nul
 	// Check if it's a Zod schema with _def
 	const schema = zodSchema as any;
 	if (schema._def) {
-		// Try to use zodToJsonSchema if available, otherwise extract manually
 		const def = schema._def;
 
+		// For ZodEffects (wrapped schemas with transformations), unwrap to get the underlying schema
+		if (def.typeName === 'ZodEffects' && def.schema) {
+			console.log('[extractSchemaFromZod] Unwrapping ZodEffects to extract underlying schema');
+			return extractSchemaFromZod(def.schema);
+		}
+
 		// For ZodObject, extract shape
-		if (def.typeName === 'ZodObject' && def.shape) {
+		if (def.typeName === 'ZodObject') {
+			const shape = typeof def.shape === 'function' ? def.shape() : def.shape;
+
+			if (!shape || Object.keys(shape).length === 0) {
+				console.log('[extractSchemaFromZod] ZodObject has empty shape, returning null');
+				return null;
+			}
+
 			const properties: Record<string, unknown> = {};
 			const required: string[] = [];
 
-			for (const [key, value] of Object.entries(def.shape() || def.shape)) {
+			for (const [key, value] of Object.entries(shape)) {
 				const fieldDef = (value as any)._def;
 
 				// Extract field info
@@ -92,6 +104,11 @@ function extractSchemaFromZod(zodSchema: unknown): Record<string, unknown> | nul
 
 				properties[key] = fieldSchema;
 			}
+
+			console.log(
+				'[extractSchemaFromZod] Extracted from ZodObject:',
+				JSON.stringify({ properties, required }, null, 2),
+			);
 
 			return {
 				type: 'object',
@@ -283,6 +300,7 @@ export function convertN8nToolToInternal(tool: N8nAITool): ConvertedTool {
 
 		// Regular tool with _call that expects string input
 		console.log(`[toolConverter]   -> Treating as regular string-based tool`);
+		console.log(`[toolConverter]   Original schema:`, JSON.stringify(tool.schema, null, 2));
 
 		// Determine the appropriate default schema based on tool name
 		let defaultSchema = {
@@ -310,11 +328,31 @@ export function convertN8nToolToInternal(tool: N8nAITool): ConvertedTool {
 			};
 		}
 
+		// First, try to extract schema from tool.schema (if it's Zod)
+		let extractedSchema = tool.schema ? validateAndFixSchema(tool.schema) : null;
+
+		// If extracted schema is empty (no properties), use default schema
+		if (
+			!extractedSchema ||
+			!extractedSchema.properties ||
+			Object.keys(extractedSchema.properties).length === 0
+		) {
+			console.log(`[toolConverter]   Extracted schema is empty, using default schema`);
+			extractedSchema = defaultSchema;
+		}
+
+		const finalSchema = extractedSchema;
+		console.log(`[toolConverter]   Final schema:`, JSON.stringify(finalSchema, null, 2));
+
 		return {
 			name: normalizeToolName(tool.name),
 			description: tool.description || 'No description provided',
-			schema: validateAndFixSchema(tool.schema || defaultSchema),
+			schema: finalSchema,
 			call: async (args: Record<string, unknown>) => {
+				console.log(`[toolConverter] Calling regular _call tool: ${tool.name}`);
+				console.log(`[toolConverter]   args:`, JSON.stringify(args, null, 2));
+				console.log(`[toolConverter]   args keys:`, Object.keys(args));
+
 				// LangChain tools wrapped by logWrapper expect string input
 				// Try to extract the actual query/expression from args
 				let input: string;
@@ -335,7 +373,10 @@ export function convertN8nToolToInternal(tool: N8nAITool): ConvertedTool {
 					input = (firstStringValue as string) || JSON.stringify(args);
 				}
 
-				return await tool._call!(input);
+				console.log(`[toolConverter]   Extracted input:`, input);
+				const result = await tool._call!(input);
+				console.log(`[toolConverter]   Result:`, result);
+				return result;
 			},
 		};
 	}

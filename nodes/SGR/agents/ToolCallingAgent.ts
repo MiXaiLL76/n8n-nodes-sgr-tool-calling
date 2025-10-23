@@ -553,17 +553,25 @@ export class ToolCallingAgent extends BaseAgent {
 		}
 
 		// Convert to OpenAI function format
-		const connectedToolsFormatted: Tool[] = connectedTools.map((t) => ({
-			type: 'function' as const,
-			function: {
-				name: t.name,
-				description: t.description,
-				parameters: t.schema || {
-					type: 'object',
-					properties: {},
+		const connectedToolsFormatted: Tool[] = connectedTools.map((t) => {
+			const toolDef = {
+				type: 'function' as const,
+				function: {
+					name: t.name,
+					description: t.description,
+					parameters: t.schema || {
+						type: 'object',
+						properties: {},
+					},
 				},
-			},
-		}));
+			};
+
+			// Log tool definition for debugging
+			this.logger.debug(`[prepareTools] Connected tool: ${t.name}`);
+			this.logger.debug(`   Schema: ${JSON.stringify(toolDef.function.parameters, null, 2)}`);
+
+			return toolDef;
+		});
 
 		// Add additional custom tools from config
 		const additionalTools: Tool[] =
