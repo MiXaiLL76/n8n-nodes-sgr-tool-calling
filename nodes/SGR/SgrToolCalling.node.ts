@@ -443,8 +443,8 @@ export class SgrToolCalling implements INodeType {
 
 				// Convert connected tools to internal format
 				const connectedTools = rawConnectedTools
-					? convertN8nToolsToInternal(rawConnectedTools as unknown as N8nAITool[]).map((tool) =>
-							createLoggedToolWrapper(tool, logger),
+					? convertN8nToolsToInternal(rawConnectedTools as unknown as N8nAITool[], logger).map(
+							(tool) => createLoggedToolWrapper(tool, logger),
 						)
 					: [];
 

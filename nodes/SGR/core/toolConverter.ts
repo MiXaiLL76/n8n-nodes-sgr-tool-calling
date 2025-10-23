@@ -4,7 +4,7 @@
  */
 /* eslint-disable @typescript-eslint/ban-ts-comment */
 // @ts-nocheck
-import type { IExecuteFunctions, Logger } from 'n8n-workflow';
+import type { Logger } from 'n8n-workflow';
 
 export interface N8nAITool {
 	name: string;
@@ -44,20 +44,22 @@ function normalizeToolName(name: string): string {
  * Extract JSON Schema from Zod schema
  * Zod schemas have _def property with the actual schema definition
  */
-function extractSchemaFromZod(zodSchema: unknown): Record<string, unknown> | null {
+function extractSchemaFromZod(zodSchema: unknown, logger?: Logger): Record<string, unknown> | null {
 	if (!zodSchema || typeof zodSchema !== 'object') {
 		return null;
 	}
 
 	// Check if it's a Zod schema with _def
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	const schema = zodSchema as any;
 	if (schema._def) {
-		const def = schema._def;
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		const def = schema._def as any;
 
 		// For ZodEffects (wrapped schemas with transformations), unwrap to get the underlying schema
 		if (def.typeName === 'ZodEffects' && def.schema) {
-			console.log('[extractSchemaFromZod] Unwrapping ZodEffects to extract underlying schema');
-			return extractSchemaFromZod(def.schema);
+			logger?.debug('[extractSchemaFromZod] Unwrapping ZodEffects to extract underlying schema');
+			return extractSchemaFromZod(def.schema, logger);
 		}
 
 		// For ZodObject, extract shape
@@ -65,7 +67,7 @@ function extractSchemaFromZod(zodSchema: unknown): Record<string, unknown> | nul
 			const shape = typeof def.shape === 'function' ? def.shape() : def.shape;
 
 			if (!shape || Object.keys(shape).length === 0) {
-				console.log('[extractSchemaFromZod] ZodObject has empty shape, returning null');
+				logger?.debug('[extractSchemaFromZod] ZodObject has empty shape, returning null');
 				return null;
 			}
 
@@ -73,6 +75,7 @@ function extractSchemaFromZod(zodSchema: unknown): Record<string, unknown> | nul
 			const required: string[] = [];
 
 			for (const [key, value] of Object.entries(shape)) {
+				// eslint-disable-next-line @typescript-eslint/no-explicit-any
 				const fieldDef = (value as any)._def;
 
 				// Extract field info
@@ -105,9 +108,8 @@ function extractSchemaFromZod(zodSchema: unknown): Record<string, unknown> | nul
 				properties[key] = fieldSchema;
 			}
 
-			console.log(
-				'[extractSchemaFromZod] Extracted from ZodObject:',
-				JSON.stringify({ properties, required }, null, 2),
+			logger?.debug(
+				`[extractSchemaFromZod] Extracted from ZodObject: ${JSON.stringify({ properties, required }, null, 2)}`,
 			);
 
 			return {
@@ -125,13 +127,13 @@ function extractSchemaFromZod(zodSchema: unknown): Record<string, unknown> | nul
  * Clean up schema by removing library-specific metadata fields
  * Removes Zod internal fields: _def, _cached, ~standard, etc.
  */
-function cleanSchemaMetadata(schema: unknown): Record<string, unknown> {
+function cleanSchemaMetadata(schema: unknown, logger?: Logger): Record<string, unknown> {
 	if (!schema || typeof schema !== 'object') {
 		return schema as Record<string, unknown>;
 	}
 
 	// First, try to extract from Zod
-	const zodExtracted = extractSchemaFromZod(schema);
+	const zodExtracted = extractSchemaFromZod(schema, logger);
 	if (zodExtracted) {
 		return zodExtracted;
 	}
@@ -153,6 +155,7 @@ function cleanSchemaMetadata(schema: unknown): Record<string, unknown> {
 		for (const prop in cleaned.properties as Record<string, unknown>) {
 			cleanedProps[prop] = cleanSchemaMetadata(
 				(cleaned.properties as Record<string, unknown>)[prop],
+				logger,
 			);
 		}
 		cleaned.properties = cleanedProps;
@@ -160,7 +163,7 @@ function cleanSchemaMetadata(schema: unknown): Record<string, unknown> {
 
 	// Clean items in arrays
 	if (cleaned.items) {
-		cleaned.items = cleanSchemaMetadata(cleaned.items);
+		cleaned.items = cleanSchemaMetadata(cleaned.items, logger);
 	}
 
 	return cleaned;
@@ -174,9 +177,10 @@ function cleanSchemaMetadata(schema: unknown): Record<string, unknown> {
 function validateAndFixSchema(
 	schema: unknown,
 	enableStrictMode: boolean = false,
+	logger?: Logger,
 ): Record<string, unknown> {
 	// First, clean metadata fields
-	const cleanedSchema = cleanSchemaMetadata(schema);
+	const cleanedSchema = cleanSchemaMetadata(schema, logger);
 
 	if (!cleanedSchema || Object.keys(cleanedSchema).length === 0) {
 		return {
@@ -231,13 +235,13 @@ function validateAndFixSchema(
 /**
  * Convert n8n AI Tool to our internal format
  */
-export function convertN8nToolToInternal(tool: N8nAITool): ConvertedTool {
-	console.log(`[toolConverter] Converting tool: ${tool.name}`);
-	console.log(`[toolConverter]   Has _call: ${!!tool._call}`);
-	console.log(`[toolConverter]   Has call: ${!!tool.call}`);
-	console.log(`[toolConverter]   Has func: ${!!tool.func}`);
-	console.log(`[toolConverter]   Has invoke: ${!!('invoke' in tool)}`);
-	console.log(`[toolConverter]   Has getTools: ${!!('getTools' in tool)}`);
+export function convertN8nToolToInternal(tool: N8nAITool, logger?: Logger): ConvertedTool {
+	logger?.debug(`[toolConverter] Converting tool: ${tool.name}`);
+	logger?.debug(`[toolConverter]   Has _call: ${!!tool._call}`);
+	logger?.debug(`[toolConverter]   Has call: ${!!tool.call}`);
+	logger?.debug(`[toolConverter]   Has func: ${!!tool.func}`);
+	logger?.debug(`[toolConverter]   Has invoke: ${!!('invoke' in tool)}`);
+	logger?.debug(`[toolConverter]   Has getTools: ${!!('getTools' in tool)}`);
 
 	// Case 1: LangChain Tool wrapped by logWrapper (has _call method)
 	// This is the most common case for n8n built-in tools like Calculator, Code Tool, etc.
@@ -251,18 +255,17 @@ export function convertN8nToolToInternal(tool: N8nAITool): ConvertedTool {
 			typeof tool.schema === 'object' &&
 			('_def' in tool.schema || 'parse' in tool.schema);
 
-		console.log(`[toolConverter] Tool ${tool.name} has _call method`);
-		console.log(`[toolConverter]   Also has func: ${hasFunc}`);
-		console.log(`[toolConverter]   Also has Zod schema: ${hasZodSchema}`);
+		logger?.debug(`[toolConverter] Tool ${tool.name} has _call method`);
+		logger?.debug(`[toolConverter]   Also has func: ${hasFunc}`);
+		logger?.debug(`[toolConverter]   Also has Zod schema: ${hasZodSchema}`);
 
 		// If it has both _call and func with Zod schema, it's a wrapped DynamicStructuredTool
 		if (hasFunc && hasZodSchema) {
-			console.log(`[toolConverter]   -> Treating as wrapped DynamicStructuredTool (MCP tool)`);
-			const zodSchema = tool.schema as { parse?: (args: unknown) => unknown };
+			logger?.debug(`[toolConverter]   -> Treating as wrapped DynamicStructuredTool (MCP tool)`);
 			const toolName = normalizeToolName(tool.name);
 
-			const extractedSchema = validateAndFixSchema(tool.schema);
-			console.log(
+			const extractedSchema = validateAndFixSchema(tool.schema, false, logger);
+			logger?.debug(
 				`[toolConverter]   Extracted schema:`,
 				JSON.stringify(extractedSchema, null, 2),
 			);
@@ -273,13 +276,13 @@ export function convertN8nToolToInternal(tool: N8nAITool): ConvertedTool {
 				schema: extractedSchema,
 				call: async (args: Record<string, unknown>) => {
 					// Debug: log what we're about to call the tool with
-					console.log(`[toolConverter] Calling wrapped DynamicStructuredTool ${toolName}:`);
-					console.log(`[toolConverter]   args:`, JSON.stringify(args, null, 2));
+					logger?.debug(`[toolConverter] Calling wrapped DynamicStructuredTool ${toolName}:`);
+					logger?.debug(`[toolConverter]   args: ${JSON.stringify(args, null, 2)}`);
 
 					// IMPORTANT: Don't use _call! The logWrapper's _call expects a string.
 					// Instead, use func or invoke which expect objects for DynamicStructuredTool
 					if (tool.func) {
-						console.log(`[toolConverter]   Using tool.func (bypassing logWrapper)`);
+						logger?.debug(`[toolConverter]   Using tool.func (bypassing logWrapper)`);
 
 						// Call tool.func directly without Zod validation
 						// The tool's internal implementation will handle validation
@@ -287,11 +290,13 @@ export function convertN8nToolToInternal(tool: N8nAITool): ConvertedTool {
 						// while our JSON schema might allow them
 						return await tool.func!(args);
 					} else if ('invoke' in tool && typeof tool.invoke === 'function') {
-						console.log(`[toolConverter]   Using tool.invoke`);
+						logger?.debug(`[toolConverter]   Using tool.invoke`);
+						// eslint-disable-next-line @typescript-eslint/no-explicit-any
 						return await (tool as any).invoke(args);
 					} else {
 						// Fallback to _call (shouldn't happen for MCP tools)
-						console.log(`[toolConverter]   WARNING: Falling back to _call (may fail)`);
+						logger?.debug(`[toolConverter]   WARNING: Falling back to _call (may fail)`);
+						// eslint-disable-next-line @typescript-eslint/no-explicit-any
 						return await tool._call!(args as any);
 					}
 				},
@@ -299,8 +304,8 @@ export function convertN8nToolToInternal(tool: N8nAITool): ConvertedTool {
 		}
 
 		// Regular tool with _call that expects string input
-		console.log(`[toolConverter]   -> Treating as regular string-based tool`);
-		console.log(`[toolConverter]   Original schema:`, JSON.stringify(tool.schema, null, 2));
+		logger?.debug(`[toolConverter]   -> Treating as regular string-based tool`);
+		logger?.debug(`[toolConverter]   Original schema: ${JSON.stringify(tool.schema, null, 2)}`);
 
 		// Determine the appropriate default schema based on tool name
 		let defaultSchema = {
@@ -329,7 +334,7 @@ export function convertN8nToolToInternal(tool: N8nAITool): ConvertedTool {
 		}
 
 		// First, try to extract schema from tool.schema (if it's Zod)
-		let extractedSchema = tool.schema ? validateAndFixSchema(tool.schema) : null;
+		let extractedSchema = tool.schema ? validateAndFixSchema(tool.schema, false, logger) : null;
 
 		// If extracted schema is empty (no properties), use default schema
 		if (
@@ -337,21 +342,21 @@ export function convertN8nToolToInternal(tool: N8nAITool): ConvertedTool {
 			!extractedSchema.properties ||
 			Object.keys(extractedSchema.properties).length === 0
 		) {
-			console.log(`[toolConverter]   Extracted schema is empty, using default schema`);
+			logger?.debug(`[toolConverter]   Extracted schema is empty, using default schema`);
 			extractedSchema = defaultSchema;
 		}
 
 		const finalSchema = extractedSchema;
-		console.log(`[toolConverter]   Final schema:`, JSON.stringify(finalSchema, null, 2));
+		logger?.debug(`[toolConverter]   Final schema: ${JSON.stringify(finalSchema, null, 2)}`);
 
 		return {
 			name: normalizeToolName(tool.name),
 			description: tool.description || 'No description provided',
 			schema: finalSchema,
 			call: async (args: Record<string, unknown>) => {
-				console.log(`[toolConverter] Calling regular _call tool: ${tool.name}`);
-				console.log(`[toolConverter]   args:`, JSON.stringify(args, null, 2));
-				console.log(`[toolConverter]   args keys:`, Object.keys(args));
+				logger?.debug(`[toolConverter] Calling regular _call tool: ${tool.name}`);
+				logger?.debug(`[toolConverter]   args: ${JSON.stringify(args, null, 2)}`);
+				logger?.debug(`[toolConverter]   args keys:`, Object.keys(args));
 
 				// LangChain tools wrapped by logWrapper expect string input
 				// Try to extract the actual query/expression from args
@@ -373,9 +378,9 @@ export function convertN8nToolToInternal(tool: N8nAITool): ConvertedTool {
 					input = (firstStringValue as string) || JSON.stringify(args);
 				}
 
-				console.log(`[toolConverter]   Extracted input:`, input);
+				logger?.debug(`[toolConverter]   Extracted input:`, input);
 				const result = await tool._call!(input);
-				console.log(`[toolConverter]   Result:`, result);
+				logger?.debug(`[toolConverter]   Result:`, result);
 				return result;
 			},
 		};
@@ -386,7 +391,7 @@ export function convertN8nToolToInternal(tool: N8nAITool): ConvertedTool {
 		return {
 			name: normalizeToolName(tool.name),
 			description: tool.description,
-			schema: validateAndFixSchema(tool.schema), // schema can be undefined
+			schema: validateAndFixSchema(tool.schema, false, logger), // schema can be undefined
 			call: tool.call,
 		};
 	}
@@ -402,12 +407,12 @@ export function convertN8nToolToInternal(tool: N8nAITool): ConvertedTool {
 			typeof tool.schema === 'object' &&
 			('_def' in tool.schema || 'parse' in tool.schema);
 
-		console.log(`[toolConverter] Converting tool with func: ${tool.name}`);
-		console.log(`[toolConverter]   Has schema: ${!!tool.schema}`);
-		console.log(`[toolConverter]   Schema type: ${typeof tool.schema}`);
-		console.log(`[toolConverter]   Has _def: ${tool.schema && '_def' in tool.schema}`);
-		console.log(`[toolConverter]   Has parse: ${tool.schema && 'parse' in tool.schema}`);
-		console.log(`[toolConverter]   Is structured tool: ${hasZodSchema}`);
+		logger?.debug(`[toolConverter] Converting tool with func: ${tool.name}`);
+		logger?.debug(`[toolConverter]   Has schema: ${!!tool.schema}`);
+		logger?.debug(`[toolConverter]   Schema type: ${typeof tool.schema}`);
+		logger?.debug(`[toolConverter]   Has _def: ${tool.schema && '_def' in tool.schema}`);
+		logger?.debug(`[toolConverter]   Has parse: ${tool.schema && 'parse' in tool.schema}`);
+		logger?.debug(`[toolConverter]   Is structured tool: ${hasZodSchema}`);
 
 		const isStructuredTool = hasZodSchema;
 
@@ -420,23 +425,23 @@ export function convertN8nToolToInternal(tool: N8nAITool): ConvertedTool {
 			return {
 				name: toolName,
 				description: tool.description || 'No description provided',
-				schema: validateAndFixSchema(tool.schema),
+				schema: validateAndFixSchema(tool.schema, false, logger),
 				call: async (args: Record<string, unknown>) => {
 					// Debug: log what we're about to call the tool with
-					console.log(`[toolConverter] DynamicStructuredTool ${toolName}:`);
-					console.log(`[toolConverter]   args type: ${typeof args}`);
-					console.log(`[toolConverter]   args keys: ${Object.keys(args).join(', ')}`);
-					console.log(`[toolConverter]   args value:`, JSON.stringify(args, null, 2));
+					logger?.debug(`[toolConverter] DynamicStructuredTool ${toolName}:`);
+					logger?.debug(`[toolConverter]   args type: ${typeof args}`);
+					logger?.debug(`[toolConverter]   args keys: ${Object.keys(args).join(', ')}`);
+					logger?.debug(`[toolConverter]   args value: ${JSON.stringify(args, null, 2)}`);
 
 					// If schema has parse method (Zod), validate/transform args
 					let validatedArgs = args;
 					if (zodSchema.parse && typeof zodSchema.parse === 'function') {
 						try {
-							console.log(`[toolConverter]   Validating with Zod schema...`);
+							logger?.debug(`[toolConverter]   Validating with Zod schema...`);
 							validatedArgs = zodSchema.parse(args) as Record<string, unknown>;
-							console.log(`[toolConverter]   Validation successful`);
+							logger?.debug(`[toolConverter]   Validation successful`);
 						} catch (error) {
-							console.log(`[toolConverter]   Validation failed:`, error);
+							logger?.debug(`[toolConverter]   Validation failed:`, error);
 							// If validation fails, try to pass args as-is
 							// Some tools might be more lenient
 							validatedArgs = args;
@@ -444,7 +449,9 @@ export function convertN8nToolToInternal(tool: N8nAITool): ConvertedTool {
 					}
 
 					// Pass args directly as object
-					console.log(`[toolConverter]   Calling tool.func with:`, JSON.stringify(validatedArgs, null, 2));
+					logger?.debug(
+						`[toolConverter]   Calling tool.func with: ${JSON.stringify(validatedArgs, null, 2)}`,
+					);
 					return await tool.func!(validatedArgs);
 				},
 			};
@@ -533,7 +540,7 @@ export function convertN8nToolToInternal(tool: N8nAITool): ConvertedTool {
  * Convert array of n8n AI Tools to internal format
  * Handles toolkits that contain multiple tools
  */
-export function convertN8nToolsToInternal(tools: N8nAITool[]): ConvertedTool[] {
+export function convertN8nToolsToInternal(tools: N8nAITool[], logger?: Logger): ConvertedTool[] {
 	const convertedTools: ConvertedTool[] = [];
 
 	for (const tool of tools) {
@@ -547,7 +554,7 @@ export function convertN8nToolsToInternal(tools: N8nAITool[]): ConvertedTool[] {
 			if (Array.isArray(toolkitTools)) {
 				for (const subTool of toolkitTools) {
 					try {
-						convertedTools.push(convertN8nToolToInternal(subTool));
+						convertedTools.push(convertN8nToolToInternal(subTool, logger));
 					} catch {
 						// Skip tools that fail conversion - will be logged by caller
 					}
@@ -556,7 +563,7 @@ export function convertN8nToolsToInternal(tools: N8nAITool[]): ConvertedTool[] {
 		} else {
 			// Convert single tool
 			try {
-				convertedTools.push(convertN8nToolToInternal(tool));
+				convertedTools.push(convertN8nToolToInternal(tool, logger));
 			} catch {
 				// Skip tools that fail conversion - will be logged by caller
 			}
