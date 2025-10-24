@@ -21,11 +21,12 @@
 	"scripts": {
 		"build": "n8n-node build",
 		"build:watch": "tsc --watch",
+		"build:prod": "n8n-node build && node scripts/obfuscate.js",
 		"dev": "n8n-node dev",
 		"lint": "n8n-node lint",
 		"lint:fix": "n8n-node lint --fix",
-		"release": "n8n-node release",
-		"prepublishOnly": "n8n-node prerelease"
+		"release": "npm run build:prod && n8n-node release",
+		"prepublishOnly": "npm run build:prod && n8n-node prerelease"
 	},
 	"files": [
 		"dist"
@@ -45,6 +46,7 @@
 	"devDependencies": {
 		"@n8n/node-cli": "*",
 		"eslint": "9.32.0",
+		"javascript-obfuscator": "^4.1.1",
 		"prettier": "3.6.2",
 		"release-it": "^19.0.4",
 		"typescript": "5.9.2"

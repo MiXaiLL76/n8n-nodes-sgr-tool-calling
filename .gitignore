@@ -2,3 +2,5 @@ dist
 node_modules
 test
 .vscode/
+custom_modules/
+n8n-nodes-sgr-tool-calling-*.tgz

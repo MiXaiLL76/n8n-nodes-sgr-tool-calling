@@ -3,7 +3,7 @@
  * Similar to ResearchContext from Python version
  */
 
-import { AgentState, type ExecutionLogEntry } from '../types';
+import { AgentState, type ExecutionLogEntry, type SourceData, type SearchResult } from '../types';
 
 export class AgentContext {
 	iteration: number = 0;
@@ -11,6 +11,10 @@ export class AgentContext {
 	clarifications_used: number = 0;
 	searches_used: number = 0;
 	executionLog: ExecutionLogEntry[] = [];
+
+	// Research data from Python ResearchContext
+	sources: Map<string, SourceData> = new Map();
+	searches: SearchResult[] = [];
 
 	constructor() {
 		this.reset();
@@ -22,6 +26,8 @@ export class AgentContext {
 		this.clarifications_used = 0;
 		this.searches_used = 0;
 		this.executionLog = [];
+		this.sources = new Map();
+		this.searches = [];
 	}
 
 	logToolCall(toolName: string, args: Record<string, unknown>): void {
@@ -70,5 +76,33 @@ export class AgentContext {
 			this.state === AgentState.FAILED ||
 			this.state === AgentState.MAX_ITERATIONS_REACHED
 		);
+	}
+
+	/**
+	 * Add a source to the context
+	 */
+	addSource(url: string, sourceData: SourceData): void {
+		this.sources.set(url, sourceData);
+	}
+
+	/**
+	 * Add a search result to the context
+	 */
+	addSearch(searchResult: SearchResult): void {
+		this.searches.push(searchResult);
+	}
+
+	/**
+	 * Get sources as formatted string for report
+	 */
+	getSourcesAsString(): string {
+		const sourcesArray = Array.from(this.sources.values());
+		if (sourcesArray.length === 0) {
+			return '';
+		}
+
+		return sourcesArray
+			.map((source) => `[${source.number}] ${source.title || 'Untitled'} - ${source.url}`)
+			.join('\n');
 	}
 }

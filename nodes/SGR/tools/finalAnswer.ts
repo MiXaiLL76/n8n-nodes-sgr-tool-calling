@@ -1,3 +1,5 @@
+// https://github.com/vamplabAI/sgr-deep-research/blob/main/sgr_deep_research/core/tools/final_answer_tool.py
+
 export const finalAnswerTool = {
 	name: 'final_answer_tool',
 	description: `Finalize research task and complete agent execution after all steps are completed.

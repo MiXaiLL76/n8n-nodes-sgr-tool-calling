@@ -11,6 +11,7 @@ import {
 	reasoningTool,
 	finalAnswerTool,
 	createReportTool,
+	createReportToolWithContext,
 	clarificationTool,
 	generatePlanTool,
 	adaptPlanTool,
@@ -267,13 +268,16 @@ export class ToolCallingAgent extends BaseAgent {
 		toolArgs: Record<string, unknown>,
 	): Promise<string> {
 		// Check if it's a built-in tool
+		// Use contextual version of createReportTool for access to sources
+		const contextualCreateReportTool = createReportToolWithContext(this.context, this.logger);
+
 		const builtInToolsMap: Record<
 			string,
 			{ call: (args: Record<string, unknown>) => Promise<string> }
 		> = {
 			[reasoningTool.name]: reasoningTool,
 			[finalAnswerTool.name]: finalAnswerTool,
-			[createReportTool.name]: createReportTool,
+			[createReportTool.name]: contextualCreateReportTool,
 			[clarificationTool.name]: clarificationTool,
 			[generatePlanTool.name]: generatePlanTool,
 			[adaptPlanTool.name]: adaptPlanTool,
@@ -322,6 +326,13 @@ export class ToolCallingAgent extends BaseAgent {
 				) {
 					this.context.incrementSearches();
 					this.logger.info(`         🔍 Search count incremented: ${this.context.searches_used}`);
+
+					// Try to extract sources from search results (for Tavily Search Tool)
+					const formattedResult = this.extractAndStoreSources(result, toolArgs);
+					if (formattedResult) {
+						// Return formatted text for AI model instead of full JSON
+						return formattedResult;
+					}
 				}
 				return typeof result === 'string' ? result : JSON.stringify(result, null, 2);
 			} catch (error) {
@@ -585,5 +596,74 @@ export class ToolCallingAgent extends BaseAgent {
 			})) || [];
 
 		return [...tools, ...connectedToolsFormatted, ...additionalTools];
+	}
+
+	/**
+	 * Extract sources from search tool results and store them in context
+	 * Similar to Python's TavilySearchService behavior
+	 * Returns formatted text for AI model, or undefined if no sources were extracted
+	 */
+	private extractAndStoreSources(
+		result: string | object,
+		toolArgs: Record<string, unknown>,
+	): string | undefined {
+		try {
+			// Try to parse result as JSON
+			const resultString = typeof result === 'string' ? result : JSON.stringify(result);
+			const parsed = JSON.parse(resultString);
+
+			// Check if result contains sources metadata (from our modified SgrTavilySearchTool)
+			if (parsed.sources && Array.isArray(parsed.sources)) {
+				const query = parsed.query || (toolArgs.query as string) || '';
+
+				// Add sources to context
+				let addedCount = 0;
+				for (const source of parsed.sources) {
+					if (source.url) {
+						// Calculate next source number based on existing sources
+						const nextNumber = this.context.sources.size + 1;
+						const sourceData = {
+							number: nextNumber,
+							title: source.title || 'Untitled',
+							url: source.url,
+							snippet: source.snippet || '',
+							full_content: source.full_content || '',
+							char_count: source.char_count || 0,
+						};
+
+						this.context.addSource(source.url, sourceData);
+						addedCount++;
+					}
+				}
+
+				this.logger.info(
+					`         📚 Added ${addedCount} sources to context (total: ${this.context.sources.size})`,
+				);
+
+				// Add search result to context
+				if (query) {
+					const searchResult = {
+						query,
+						answer: parsed.answer || '',
+						citations: parsed.sources || [],
+						timestamp: new Date().toISOString(),
+					};
+					this.context.addSearch(searchResult);
+					this.logger.debug(`         📝 Recorded search: "${query}"`);
+				}
+
+				// Return formatted text for AI model (if available)
+				if (parsed.formatted) {
+					return parsed.formatted;
+				}
+			}
+		} catch {
+			// If parsing fails, it's probably not a JSON result - that's okay
+			this.logger.debug(
+				`         ℹ️  Could not extract sources from result (not JSON or no sources field)`,
+			);
+		}
+
+		return undefined;
 	}
 }

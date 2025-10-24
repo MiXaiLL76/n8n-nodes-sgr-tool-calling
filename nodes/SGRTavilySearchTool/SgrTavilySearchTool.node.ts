@@ -130,8 +130,38 @@ Returns: Page titles, URLs, snippets, and optionally a summarized answer`,
 
 					const data = response as {
 						answer?: string;
-						results?: Array<{ title: string; url: string; content?: string }>;
+						results?: Array<{
+							title: string;
+							url: string;
+							content?: string;
+							raw_content?: string;
+						}>;
 					};
+
+					// Build sources metadata for AgentContext
+					interface SourceData {
+						number: number;
+						title: string;
+						url: string;
+						snippet: string;
+						full_content: string;
+						char_count: number;
+					}
+
+					const sources: SourceData[] = [];
+					if (data.results && Array.isArray(data.results)) {
+						data.results.forEach((result, index: number) => {
+							const source: SourceData = {
+								number: index + 1,
+								title: result.title || 'Untitled',
+								url: result.url,
+								snippet: result.content || '',
+								full_content: result.raw_content || '',
+								char_count: (result.raw_content || '').length,
+							};
+							sources.push(source);
+						});
+					}
 
 					// Format the response
 					let formattedResult = `Search Query: ${query}\n\n`;
@@ -157,7 +187,16 @@ Returns: Page titles, URLs, snippets, and optionally a summarized answer`,
 						});
 					}
 
-					return formattedResult;
+					// Return result with embedded sources metadata as JSON
+					// This allows ToolCallingAgent to extract sources and add them to context
+					const resultWithMetadata = {
+						formatted: formattedResult,
+						query,
+						answer: data.answer || '',
+						sources,
+					};
+
+					return JSON.stringify(resultWithMetadata, null, 2);
 				} catch (error) {
 					return `Error executing Tavily search: ${(error as Error).message}`;
 				}

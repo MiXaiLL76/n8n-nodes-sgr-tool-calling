@@ -1,3 +1,5 @@
+// https://github.com/vamplabAI/sgr-deep-research/blob/main/sgr_deep_research/core/tools/reasoning_tool.py
+
 export const reasoningTool = {
 	name: 'reasoning_tool',
 	description: `Agent core logic, determines next reasoning step with adaptive planning by schema-guided-reasoning capabilities. Keep all text fields concise and focused.

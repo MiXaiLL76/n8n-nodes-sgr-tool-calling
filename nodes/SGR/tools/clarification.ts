@@ -1,3 +1,4 @@
+// https://github.com/vamplabAI/sgr-deep-research/blob/main/sgr_deep_research/core/tools/clarification_tool.py
 export const clarificationTool = {
 	name: 'clarification_tool',
 	description: `Ask clarifying questions when facing ambiguous request.
