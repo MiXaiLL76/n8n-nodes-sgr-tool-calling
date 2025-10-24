@@ -11,6 +11,7 @@ import {
 	reasoningTool,
 	finalAnswerTool,
 	createReportTool,
+	createReportToolWithContext,
 	clarificationTool,
 	generatePlanTool,
 	adaptPlanTool,
@@ -30,11 +31,9 @@ export class ToolCallingAgent extends BaseAgent {
 	 * 2. Action selection phase - let agent choose which tool to use
 	 */
 	async execute(): Promise<void> {
-		const logger = this.executeFunctions.logger;
-
-		logger.info('🚀 SGR Agent execution started');
-		logger.info(`📋 Task: ${this.config.task.substring(0, 100)}...`);
-		logger.info(
+		this.logger.info('🚀 SGR Agent execution started');
+		this.logger.info(`📋 Task: ${this.config.task.substring(0, 100)}...`);
+		this.logger.info(
 			`⚙️  Config: maxIterations=${this.config.maxIterations}, maxSearches=${this.config.maxSearches}, maxClarifications=${this.config.maxClarifications}`,
 		);
 
@@ -42,40 +41,40 @@ export class ToolCallingAgent extends BaseAgent {
 		while (!this.context.isFinished() && this.context.iteration < this.config.maxIterations) {
 			this.context.iteration += 1;
 
-			logger.info(`\n${'='.repeat(60)}`);
-			logger.info(`🔄 Iteration ${this.context.iteration}/${this.config.maxIterations}`);
-			logger.info(
+			this.logger.info(`\n${'='.repeat(60)}`);
+			this.logger.info(`🔄 Iteration ${this.context.iteration}/${this.config.maxIterations}`);
+			this.logger.info(
 				`📊 Stats: searches=${this.context.searches_used}/${this.config.maxSearches}, clarifications=${this.context.clarifications_used}/${this.config.maxClarifications}`,
 			);
-			logger.info(`${'='.repeat(60)}`);
+			this.logger.info(`${'='.repeat(60)}`);
 
 			// Phase 1: Reasoning phase
-			logger.info(`\n🧠 Phase 1: Reasoning`);
+			this.logger.info(`\n🧠 Phase 1: Reasoning`);
 			const reasoning = await this.reasoningPhase();
 
 			// Check if agent decided to complete
 			if (this.isCompletionStatus(reasoning.status)) {
-				logger.info(`✅ Agent decided to complete with status: ${reasoning.status}`);
+				this.logger.info(`✅ Agent decided to complete with status: ${reasoning.status}`);
 				this.context.complete();
 				break;
 			}
 
 			// Phase 2: Action selection phase
-			logger.info(`\n🎯 Phase 2: Action Selection`);
+			this.logger.info(`\n🎯 Phase 2: Action Selection`);
 			await this.actionSelectionPhase(reasoning);
 
 			// Check if max iterations reached
 			if (this.context.iteration >= this.config.maxIterations) {
-				logger.warn(`⚠️  Max iterations (${this.config.maxIterations}) reached`);
+				this.logger.warn(`⚠️  Max iterations (${this.config.maxIterations}) reached`);
 				this.context.maxIterationsReached();
 			}
 		}
 
-		logger.info(`\n${'='.repeat(60)}`);
-		logger.info(`🏁 SGR Agent execution finished`);
-		logger.info(`📈 Final state: ${this.context.state}`);
-		logger.info(`🔢 Total iterations: ${this.context.iteration}`);
-		logger.info(`${'='.repeat(60)}\n`);
+		this.logger.info(`\n${'='.repeat(60)}`);
+		this.logger.info(`🏁 SGR Agent execution finished`);
+		this.logger.info(`📈 Final state: ${this.context.state}`);
+		this.logger.info(`🔢 Total iterations: ${this.context.iteration}`);
+		this.logger.info(`${'='.repeat(60)}\n`);
 	}
 
 	/**
@@ -83,11 +82,9 @@ export class ToolCallingAgent extends BaseAgent {
 	 * Forces the agent to use reasoning tool to think about the task
 	 */
 	private async reasoningPhase(): Promise<ReasoningResult> {
-		const logger = this.executeFunctions.logger;
-
 		// Prepare tools with reasoning tool highlighted
 		const availableTools = this.prepareTools();
-		logger.info(`   📦 Available tools: ${availableTools.length}`);
+		this.logger.info(`   📦 Available tools: ${availableTools.length}`);
 
 		const reasoningTool = availableTools.find((t) =>
 			t.function?.name?.toLowerCase().includes('reasoning'),
@@ -96,20 +93,22 @@ export class ToolCallingAgent extends BaseAgent {
 		// If we have a dedicated reasoning tool, force it
 		let response;
 		if (reasoningTool) {
-			logger.info(`   🎯 Forcing reasoning tool: ${reasoningTool.function.name}`);
+			this.logger.info(`   🎯 Forcing reasoning tool: ${reasoningTool.function.name}`);
 			response = await this.callAIModelWithToolChoice(availableTools, reasoningTool.function.name);
 		} else {
-			logger.info(`   🤖 Calling AI with all tools`);
+			this.logger.info(`   🤖 Calling AI with all tools`);
 			response = await this.callAIModel(availableTools);
 		}
 
 		// Debug log the response
-		logger.debug(
+		this.logger.debug(
 			`   🔍 Response structure: ${JSON.stringify({ hasContent: !!response.content, toolCallsCount: response.tool_calls?.length || 0 })}`,
 		);
 
 		if (response.tool_calls && response.tool_calls.length > 0) {
-			logger.debug(`   🔍 First tool call structure: ${JSON.stringify(response.tool_calls[0])}`);
+			this.logger.debug(
+				`   🔍 First tool call structure: ${JSON.stringify(response.tool_calls[0])}`,
+			);
 		}
 
 		// Add assistant message to conversation
@@ -139,22 +138,22 @@ export class ToolCallingAgent extends BaseAgent {
 				toolName = toolCall.name;
 				toolArgs = (toolCall.args || {}) as Record<string, unknown>;
 			} else {
-				logger.error('❌ Invalid tool call structure received from AI model');
-				logger.error(`   Tool call object: ${JSON.stringify(toolCall)}`);
+				this.logger.error('❌ Invalid tool call structure received from AI model');
+				this.logger.error(`   Tool call object: ${JSON.stringify(toolCall)}`);
 				throw new Error('Invalid tool call structure received from AI model');
 			}
 
-			logger.info(`   🔧 Tool called: ${toolName}`);
+			this.logger.info(`   🔧 Tool called: ${toolName}`);
 
 			// Log reasoning details
 			if (toolArgs.current_situation) {
-				logger.info(`   💭 Situation: ${toolArgs.current_situation.substring(0, 100)}...`);
+				this.logger.info(`   💭 Situation: ${toolArgs.current_situation.substring(0, 100)}...`);
 			}
 			if (toolArgs.remaining_steps && toolArgs.remaining_steps.length > 0) {
-				logger.info(`   📝 Next steps: ${toolArgs.remaining_steps.join(', ')}`);
+				this.logger.info(`   📝 Next steps: ${toolArgs.remaining_steps.join(', ')}`);
 			}
 			if (toolArgs.task_completed !== undefined) {
-				logger.info(`   ✓ Task completed: ${toolArgs.task_completed}`);
+				this.logger.info(`   ✓ Task completed: ${toolArgs.task_completed}`);
 			}
 
 			// Log reasoning
@@ -173,7 +172,7 @@ export class ToolCallingAgent extends BaseAgent {
 		}
 
 		// Fallback if no reasoning provided
-		logger.warn(`   ⚠️  No reasoning tool call, using fallback`);
+		this.logger.warn(`   ⚠️  No reasoning tool call, using fallback`);
 		return {
 			reasoning: 'Continue with task',
 			completed_steps: [],
@@ -187,21 +186,19 @@ export class ToolCallingAgent extends BaseAgent {
 	 * Let the agent choose which tool to use based on the reasoning
 	 */
 	private async actionSelectionPhase(reasoning: ReasoningResult): Promise<void> {
-		const logger = this.executeFunctions.logger;
-
 		// Prepare available tools based on limits
 		const availableTools = this.prepareTools();
-		logger.info(`   📦 Available tools: ${availableTools.length}`);
+		this.logger.info(`   📦 Available tools: ${availableTools.length}`);
 
 		// Call AI Model with tool calling
 		// Note: Using "auto" instead of "required" for better compatibility
-		logger.info(`   🤖 Calling AI model for action selection...`);
+		this.logger.info(`   🤖 Calling AI model for action selection...`);
 		const response = await this.callAIModel(availableTools);
 
 		// Handle case where LLM returned text instead of tool call
 		// Similar to Python's _select_action_phase handling
 		if (!response.tool_calls || response.tool_calls.length === 0) {
-			logger.info(`   💬 LLM returned text response instead of tool call`);
+			this.logger.info(`   💬 LLM returned text response instead of tool call`);
 			const finalContent = response.content || 'Task completed successfully';
 
 			// Create a synthetic FinalAnswerTool call
@@ -231,7 +228,7 @@ export class ToolCallingAgent extends BaseAgent {
 		this.addAssistantMessage(messageContent, response.tool_calls);
 
 		// Process tool calls
-		logger.info(`   🔧 Processing ${response.tool_calls.length} tool call(s)`);
+		this.logger.info(`   🔧 Processing ${response.tool_calls.length} tool call(s)`);
 		await this.processToolCalls(response.tool_calls);
 	}
 
@@ -270,16 +267,17 @@ export class ToolCallingAgent extends BaseAgent {
 		toolName: string,
 		toolArgs: Record<string, unknown>,
 	): Promise<string> {
-		const logger = this.executeFunctions.logger;
-
 		// Check if it's a built-in tool
+		// Use contextual version of createReportTool for access to sources
+		const contextualCreateReportTool = createReportToolWithContext(this.context, this.logger);
+
 		const builtInToolsMap: Record<
 			string,
 			{ call: (args: Record<string, unknown>) => Promise<string> }
 		> = {
 			[reasoningTool.name]: reasoningTool,
 			[finalAnswerTool.name]: finalAnswerTool,
-			[createReportTool.name]: createReportTool,
+			[createReportTool.name]: contextualCreateReportTool,
 			[clarificationTool.name]: clarificationTool,
 			[generatePlanTool.name]: generatePlanTool,
 			[adaptPlanTool.name]: adaptPlanTool,
@@ -291,7 +289,9 @@ export class ToolCallingAgent extends BaseAgent {
 				const result = await builtInTool.call(toolArgs);
 				return typeof result === 'string' ? result : JSON.stringify(result, null, 2);
 			} catch (error) {
-				logger.error(`         ❌ Built-in tool execution failed: ${(error as Error).message}`);
+				this.logger.error(
+					`         ❌ Built-in tool execution failed: ${(error as Error).message}`,
+				);
 				return JSON.stringify({
 					error: `Failed to execute ${toolName}: ${(error as Error).message}`,
 				});
@@ -301,9 +301,10 @@ export class ToolCallingAgent extends BaseAgent {
 		// Check if it's a connected n8n tool
 		const connectedTool = this.config.connectedTools?.find((t) => t.name === toolName);
 		if (connectedTool) {
-			logger.info(`\n         ${'═'.repeat(50)}`);
-			logger.info(`         🔧 EXECUTING TOOL: ${toolName.toUpperCase()}`);
-			logger.info(`         ${'═'.repeat(50)}`);
+			this.logger.info(`\n         ${'═'.repeat(50)}`);
+			this.logger.info(`         🔧 EXECUTING TOOL: ${toolName.toUpperCase()}`);
+			this.logger.info(`         ${'═'.repeat(50)}`);
+			this.logger.debug(`         📋 Tool arguments: ${JSON.stringify(toolArgs)}`);
 
 			// Send UI notification about tool execution
 			try {
@@ -315,8 +316,8 @@ export class ToolCallingAgent extends BaseAgent {
 			try {
 				const result = await connectedTool.call(toolArgs);
 
-				logger.info(`         ✅ TOOL COMPLETED: ${toolName.toUpperCase()}`);
-				logger.info(`         ${'═'.repeat(50)}\n`);
+				this.logger.info(`         ✅ TOOL COMPLETED: ${toolName.toUpperCase()}`);
+				this.logger.info(`         ${'═'.repeat(50)}\n`);
 
 				// Increment searches counter if it's a search tool
 				if (
@@ -324,11 +325,18 @@ export class ToolCallingAgent extends BaseAgent {
 					toolName.toLowerCase().includes('tavily')
 				) {
 					this.context.incrementSearches();
-					logger.info(`         🔍 Search count incremented: ${this.context.searches_used}`);
+					this.logger.info(`         🔍 Search count incremented: ${this.context.searches_used}`);
+
+					// Try to extract sources from search results (for Tavily Search Tool)
+					const formattedResult = this.extractAndStoreSources(result, toolArgs);
+					if (formattedResult) {
+						// Return formatted text for AI model instead of full JSON
+						return formattedResult;
+					}
 				}
 				return typeof result === 'string' ? result : JSON.stringify(result, null, 2);
 			} catch (error) {
-				logger.error(`         ❌ Tool execution failed: ${(error as Error).message}`);
+				this.logger.error(`         ❌ Tool execution failed: ${(error as Error).message}`);
 				return JSON.stringify({
 					error: `Failed to execute ${toolName}: ${(error as Error).message}`,
 				});
@@ -338,7 +346,7 @@ export class ToolCallingAgent extends BaseAgent {
 		// Check if it's an additional custom tool
 		const additionalTool = this.config.additionalTools?.find((t) => t.toolName === toolName);
 		if (additionalTool) {
-			logger.debug(`         🔹 Executing additional custom tool: ${toolName}`);
+			this.logger.debug(`         🔹 Executing additional custom tool: ${toolName}`);
 			// For additional tools, we just return the arguments as JSON
 			// In real implementation, this would call an external API or function
 			return JSON.stringify({
@@ -348,7 +356,7 @@ export class ToolCallingAgent extends BaseAgent {
 			});
 		}
 
-		logger.error(`         ❌ Tool not found: ${toolName}`);
+		this.logger.error(`         ❌ Tool not found: ${toolName}`);
 		throw new Error(`Tool ${toolName} not found`);
 	}
 
@@ -356,8 +364,6 @@ export class ToolCallingAgent extends BaseAgent {
 	 * Process tool calls from AI response
 	 */
 	private async processToolCalls(toolCalls: ToolCall[]): Promise<void> {
-		const logger = this.executeFunctions.logger;
-
 		for (let i = 0; i < toolCalls.length; i++) {
 			const toolCall = toolCalls[i];
 
@@ -369,7 +375,7 @@ export class ToolCallingAgent extends BaseAgent {
 			if (toolCall.function) {
 				// OpenAI format: {function: {name, arguments}, id}
 				if (!toolCall.function.name) {
-					logger.warn(`   ⚠️  Tool call ${i + 1}: Missing function name, skipping`);
+					this.logger.warn(`   ⚠️  Tool call ${i + 1}: Missing function name, skipping`);
 					continue;
 				}
 				toolName = toolCall.function.name;
@@ -381,7 +387,7 @@ export class ToolCallingAgent extends BaseAgent {
 							: toolCall.function.arguments;
 				} catch {
 					toolArgs = toolCall.function.arguments as Record<string, unknown>;
-					logger.warn(`      ⚠️  Failed to parse arguments`);
+					this.logger.warn(`      ⚠️  Failed to parse arguments`);
 				}
 			} else if (toolCall.name) {
 				// n8n format: {name, args, type, id}
@@ -389,32 +395,33 @@ export class ToolCallingAgent extends BaseAgent {
 				toolArgs = (toolCall.args || {}) as Record<string, unknown>;
 				toolCallId = toolCall.id;
 			} else {
-				logger.warn(`   ⚠️  Tool call ${i + 1}: Invalid structure, skipping`);
+				this.logger.warn(`   ⚠️  Tool call ${i + 1}: Invalid structure, skipping`);
 				continue;
 			}
 
-			logger.info(`\n   ${'━'.repeat(60)}`);
-			logger.info(`   🔧 Tool call ${i + 1}/${toolCalls.length}: ${toolName}`);
+			this.logger.info(`\n   ${'━'.repeat(60)}`);
+			this.logger.info(`   🔧 Tool call ${i + 1}/${toolCalls.length}: ${toolName}`);
 
 			// Log key arguments
 			if (toolArgs && typeof toolArgs === 'object') {
 				const argKeys = Object.keys(toolArgs);
 				if (argKeys.length > 0) {
-					logger.info(`      📋 Arguments: ${argKeys.join(', ')}`);
+					this.logger.info(`      📋 Arguments: ${argKeys.join(', ')}`);
 				}
+				this.logger.debug(`      📋 Full arguments JSON: ${JSON.stringify(toolArgs)}`);
 			}
 
 			// Log tool call
 			this.context.logToolCall(toolName, toolArgs);
 
 			// Execute tool
-			logger.info(`      ⚙️  Executing...`);
+			this.logger.info(`      ⚙️  Executing...`);
 			const startTime = Date.now();
 			const toolResult = await this.executeTool(toolName, toolArgs);
 			const duration = Date.now() - startTime;
 
-			logger.info(`      ✓ Completed in ${duration}ms`);
-			logger.info(`      📤 Result: ${toolResult.substring(0, 100)}...`);
+			this.logger.info(`      ✓ Completed in ${duration}ms`);
+			this.logger.info(`      📤 Result: ${toolResult.substring(0, 100)}...`);
 
 			// Update context based on tool name patterns
 			this.updateContextForTool(toolName);
@@ -557,17 +564,25 @@ export class ToolCallingAgent extends BaseAgent {
 		}
 
 		// Convert to OpenAI function format
-		const connectedToolsFormatted: Tool[] = connectedTools.map((t) => ({
-			type: 'function' as const,
-			function: {
-				name: t.name,
-				description: t.description,
-				parameters: t.schema || {
-					type: 'object',
-					properties: {},
+		const connectedToolsFormatted: Tool[] = connectedTools.map((t) => {
+			const toolDef = {
+				type: 'function' as const,
+				function: {
+					name: t.name,
+					description: t.description,
+					parameters: t.schema || {
+						type: 'object',
+						properties: {},
+					},
 				},
-			},
-		}));
+			};
+
+			// Log tool definition for debugging
+			this.logger.debug(`[prepareTools] Connected tool: ${t.name}`);
+			this.logger.debug(`   Schema: ${JSON.stringify(toolDef.function.parameters, null, 2)}`);
+
+			return toolDef;
+		});
 
 		// Add additional custom tools from config
 		const additionalTools: Tool[] =
@@ -581,5 +596,74 @@ export class ToolCallingAgent extends BaseAgent {
 			})) || [];
 
 		return [...tools, ...connectedToolsFormatted, ...additionalTools];
+	}
+
+	/**
+	 * Extract sources from search tool results and store them in context
+	 * Similar to Python's TavilySearchService behavior
+	 * Returns formatted text for AI model, or undefined if no sources were extracted
+	 */
+	private extractAndStoreSources(
+		result: string | object,
+		toolArgs: Record<string, unknown>,
+	): string | undefined {
+		try {
+			// Try to parse result as JSON
+			const resultString = typeof result === 'string' ? result : JSON.stringify(result);
+			const parsed = JSON.parse(resultString);
+
+			// Check if result contains sources metadata (from our modified SgrTavilySearchTool)
+			if (parsed.sources && Array.isArray(parsed.sources)) {
+				const query = parsed.query || (toolArgs.query as string) || '';
+
+				// Add sources to context
+				let addedCount = 0;
+				for (const source of parsed.sources) {
+					if (source.url) {
+						// Calculate next source number based on existing sources
+						const nextNumber = this.context.sources.size + 1;
+						const sourceData = {
+							number: nextNumber,
+							title: source.title || 'Untitled',
+							url: source.url,
+							snippet: source.snippet || '',
+							full_content: source.full_content || '',
+							char_count: source.char_count || 0,
+						};
+
+						this.context.addSource(source.url, sourceData);
+						addedCount++;
+					}
+				}
+
+				this.logger.info(
+					`         📚 Added ${addedCount} sources to context (total: ${this.context.sources.size})`,
+				);
+
+				// Add search result to context
+				if (query) {
+					const searchResult = {
+						query,
+						answer: parsed.answer || '',
+						citations: parsed.sources || [],
+						timestamp: new Date().toISOString(),
+					};
+					this.context.addSearch(searchResult);
+					this.logger.debug(`         📝 Recorded search: "${query}"`);
+				}
+
+				// Return formatted text for AI model (if available)
+				if (parsed.formatted) {
+					return parsed.formatted;
+				}
+			}
+		} catch {
+			// If parsing fails, it's probably not a JSON result - that's okay
+			this.logger.debug(
+				`         ℹ️  Could not extract sources from result (not JSON or no sources field)`,
+			);
+		}
+
+		return undefined;
 	}
 }

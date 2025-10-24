@@ -9,7 +9,7 @@ export class SgrApi implements ICredentialType {
 	name = 'sgrApi';
 	displayName = 'SGR OpenAI API';
 	documentationUrl = 'https://platform.openai.com/docs/api-reference';
-	icon = 'file:SGR.svg' as const;
+	icon = 'file:../nodes/SGR/SGR.svg' as const;
 	properties: INodeProperties[] = [
 		{
 			displayName: 'API Key',

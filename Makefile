@@ -26,8 +26,16 @@ format: ## Format code with prettier
 	npx prettier --write "**/*.{ts,json,md}"
 	@echo "$(GREEN)✓ Code formatted$(NC)"
 
+	npm run lint
+
 clean: ## Clean build artifacts
 	@echo "$(GREEN)Cleaning build artifacts...$(NC)"
 	rm -rf dist/
 	rm -rf node_modules/.cache
 	@echo "$(GREEN)✓ Clean complete$(NC)"
+
+prod: clean
+	@echo "$(GREEN)Building prod project...$(NC)"
+	npm run build:prod
+	npm pack
+	@echo "$(GREEN)✓ Build prod complete$(NC)"
