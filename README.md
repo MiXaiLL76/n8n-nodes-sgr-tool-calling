@@ -1,6 +1,10 @@
 # n8n-nodes-sgr-tool-calling
 
+![SGR Example](./SGR_Example.png)
+
 AI research agent with OpenAI function calling for n8n. Port of [sgr-deep-research](https://github.com/vamplabAI/sgr-deep-research) Python project.
+
+**Copyright (C) 2025 MiXaiLL76 (mike.milos@yandex.ru)**
 
 [n8n](https://n8n.io/) is a [fair-code licensed](https://docs.n8n.io/reference/license/) workflow automation platform.
 
@@ -23,7 +27,7 @@ Chat Trigger → SGR Agent → Output
         [Model][Tools][Memory]
 ```
 
-Import `SGR Example.json` to get started.
+Import **[SGR_Example.json](https://github.com/MiXaiLL76/sgr_tool_calling/blob/main//SGR_Example.json)** to get started.
 
 ## Features
 
@@ -76,63 +80,6 @@ Override default prompts:
 - **Initial User Request Template** - format task presentation
 - **Clarification Response Template** - format clarification responses
 
-## Configuration
-
-### Input Fields
-
-The node accepts these fields from previous nodes:
-
-- `chatInput`, `input`, `message`, `text`, or `task` - the user's task
-- `sessionId` - session identifier for memory (optional)
-- `clearMemory: true` or `action: 'clear'` - clear memory flag (optional)
-
-### Output
-
-```json
-{
-	"task": "Original user task",
-	"state": "COMPLETED",
-	"iterations": 5,
-	"final_message": "Agent reasoning",
-	"answer": "Final answer or report",
-	"tools_used": [
-		{ "iteration": 1, "tool": "reasoning_tool", "timestamp": "..." },
-		{ "iteration": 2, "tool": "tavily_search", "timestamp": "..." }
-	]
-}
-```
-
-Optional outputs (enable in Options):
-
-- `log` - detailed execution log
-- `conversation` - full conversation history
-
-## Advanced Usage
-
-### Two-Phase Execution
-
-Agent uses structured approach:
-
-1. **Reasoning Phase** - analyze situation, plan next steps
-2. **Action Phase** - execute tools based on plan
-
-## Included Nodes
-
-### SGR Agent
-
-Main agent node with tool calling capabilities.
-
-### SGR Tavily Search Tool
-
-Web search tool using [Tavily API](https://tavily.com/).
-
-Requires Tavily API key (credentials).
-
-Search modes:
-
-- Basic search
-- Deep research (with subqueries)
-
 ## Resources
 
 - [n8n community nodes documentation](https://docs.n8n.io/integrations/#community-nodes)
@@ -141,4 +88,27 @@ Search modes:
 
 ## License
 
-MIT
+This project is licensed under **AGPL-3.0** - see the [LICENSE](LICENSE) file for details.
+
+### Commercial Licensing
+
+**AGPL-3.0** requires you to open-source your modifications and provide source code to users if you run this software as a network service.
+
+**For commercial use** where you want to:
+
+- Keep your modifications private
+- Integrate into proprietary software
+- Provide as a managed service without open-sourcing
+
+**Contact for a commercial license:** [mike.milos@yandex.ru](mailto:mike.milos@yandex.ru)
+
+### Free Use Cases
+
+This software is **free** for:
+
+- ✅ Personal use
+- ✅ Educational purposes
+- ✅ Research projects
+- ✅ Open-source projects (compliant with AGPL-3.0)
+
+If you modify and deploy this software as a network service, you must provide source code to your users under AGPL-3.0 terms.
