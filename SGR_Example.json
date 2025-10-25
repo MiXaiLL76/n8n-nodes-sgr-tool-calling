@@ -32,7 +32,7 @@
 				},
 				"options": {}
 			},
-			"type": "CUSTOM.sgrToolCalling",
+			"type": "n8n-nodes-sgr-tool-callingsgrToolCalling",
 			"typeVersion": 1,
 			"position": [208, 0],
 			"id": "c179a12d-f90a-49d8-adff-38ab74ed1703",
@@ -62,7 +62,7 @@
 		},
 		{
 			"parameters": {},
-			"type": "CUSTOM.sgrTavilySearchTool",
+			"type": "n8n-nodes-sgr-tool-callingsgrTavilySearchTool",
 			"typeVersion": 1,
 			"position": [160, 336],
 			"id": "b36f417a-faec-486d-95ea-0423c992bb28",
