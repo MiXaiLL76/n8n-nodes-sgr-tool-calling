@@ -12,6 +12,16 @@ AI research agent with OpenAI function calling for n8n. Port of [sgr-deep-resear
 
 Follow the [installation guide](https://docs.n8n.io/integrations/community-nodes/installation/) in the n8n community nodes documentation.
 
+### Upgrading from version 0.1.2
+
+If you have version **0.1.2** or earlier installed, you need to manually remove it before installing the new version:
+
+1. **Uninstall the old package** from n8n Community Nodes settings
+2. **Restart n8n** to ensure the old package is completely removed
+3. **Install the new version** from npm or GitHub
+
+This is required due to a fix in package structure that prevents automatic updates from 0.1.2 to 0.1.3+.
+
 ## Quick Start
 
 1. Add **SGR Agent** node to your workflow
