@@ -35,12 +35,12 @@
 		"n8nNodesApiVersion": 1,
 		"strict": true,
 		"credentials": [
-			"dist/credentials/SgrApi.credentials.js",
-			"dist/credentials/TavilyApi.credentials.js"
+			"credentials/SgrApi.credentials.js",
+			"credentials/TavilyApi.credentials.js"
 		],
 		"nodes": [
-			"dist/nodes/SGR/SgrToolCalling.node.js",
-			"dist/nodes/SGRTavilySearchTool/SgrTavilySearchTool.node.js"
+			"nodes/SGR/SgrToolCalling.node.js",
+			"nodes/SGRTavilySearchTool/SgrTavilySearchTool.node.js"
 		]
 	},
 	"devDependencies": {

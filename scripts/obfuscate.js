@@ -60,6 +60,13 @@ const findJsFiles = (dir, fileList = []) => {
 		} else if (file.name.endsWith('.js') && !file.name.endsWith('.js.map')) {
 			// Add relative path from distDir
 			const relativePath = path.relative(distDir, fullPath);
+
+			// Skip node and credential files - they need to be readable by n8n
+			if (file.name.endsWith('.node.js') || file.name.endsWith('.credentials.js')) {
+				console.log(`⏭️  Skipping ${relativePath} (node/credential file - must stay readable for n8n)`);
+				return;
+			}
+
 			fileList.push(relativePath);
 		}
 	});
