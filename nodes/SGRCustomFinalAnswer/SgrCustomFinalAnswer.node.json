@@ -1,5 +1,5 @@
 {
-	"node": "n8n-nodes-sgr-tool-calling.SgrCustomFinalAnswer",
+	"node": "n8n-nodes-sgr-tool-calling.sgrCustomFinalAnswer",
 	"nodeVersion": "1.0",
 	"codexVersion": "1.0",
 	"categories": ["AI"],
