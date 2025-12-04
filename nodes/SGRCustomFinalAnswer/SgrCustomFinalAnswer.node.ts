@@ -16,7 +16,7 @@ Usage: Call after you complete research task
 NOTE: When using this custom tool, the built-in "Final Answer Tool" and "Clarification Tool"
 are automatically disabled in SGR Agent to avoid conflicts.`;
 
-export class SgrCustomFinalAnswerTool implements INodeType {
+export class SgrCustomFinalAnswer implements INodeType {
 	description: INodeTypeDescription = {
 		displayName: 'SGR Custom Final Answer Tool',
 		name: 'sgrCustomFinalAnswer',
