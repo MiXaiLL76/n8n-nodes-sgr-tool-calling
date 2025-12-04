@@ -66,7 +66,7 @@ export class SgrCustomFinalAnswerTool implements INodeType {
 	};
 
 	async supplyData(this: ISupplyDataFunctions, itemIndex: number): Promise<SupplyData> {
-		const toolName = "custom_final_answer_tool"; // this.getNodeParameter('toolName', itemIndex) as string;
+		const toolName = 'custom_final_answer_tool'; // this.getNodeParameter('toolName', itemIndex) as string;
 		const description = this.getNodeParameter('description', itemIndex) as string;
 		const jsonSchemaParam = this.getNodeParameter('jsonSchema', itemIndex);
 
