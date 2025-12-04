@@ -1,13 +1,9 @@
-import {
-	type INodeType,
-	type INodeTypeDescription,
-	type ISupplyDataFunctions,
-	type SupplyData,
-	NodeOperationError,
+import type {
+	INodeType,
+	INodeTypeDescription,
+	ISupplyDataFunctions,
+	SupplyData,
 } from 'n8n-workflow';
-
-// Import default schema from finalAnswerTool
-import { finalAnswerTool } from '../SGR/tools/finalAnswer';
 
 const DEFAULT_DESCRIPTION = `Finalize research task and complete agent execution after all steps are completed.
 
@@ -15,6 +11,33 @@ Usage: Call after you complete research task
 
 NOTE: When using this custom tool, the built-in "Final Answer Tool" and "Clarification Tool"
 are automatically disabled in SGR Agent to avoid conflicts.`;
+
+const DEFAULT_SCHEMA = {
+	type: 'object',
+	properties: {
+		reasoning: {
+			type: 'string',
+			description: 'Why task is now complete and how answer was verified',
+		},
+		completed_steps: {
+			type: 'array',
+			items: { type: 'string' },
+			description: 'Summary of completed steps including verification',
+			minItems: 1,
+			maxItems: 5,
+		},
+		answer: {
+			type: 'string',
+			description: 'Comprehensive final answer with EXACT factual details (dates, numbers, names)',
+		},
+		status: {
+			type: 'string',
+			enum: ['COMPLETED', 'FAILED'],
+			description: 'Task completion status',
+		},
+	},
+	required: ['reasoning', 'completed_steps', 'answer', 'status'],
+};
 
 export class SgrCustomFinalAnswer implements INodeType {
 	description: INodeTypeDescription = {
@@ -56,9 +79,8 @@ export class SgrCustomFinalAnswer implements INodeType {
 				displayName: 'JSON Schema',
 				name: 'jsonSchema',
 				type: 'json',
-				default: JSON.stringify(finalAnswerTool.schema, null, 2),
-				description:
-					'JSON Schema defining the structure of tool parameters (default from nodes/SGR/tools/finalAnswer.ts)',
+				default: JSON.stringify(DEFAULT_SCHEMA, null, 2),
+				description: 'JSON Schema defining the structure of tool parameters',
 				required: true,
 				validateType: 'object',
 			},
@@ -66,6 +88,9 @@ export class SgrCustomFinalAnswer implements INodeType {
 	};
 
 	async supplyData(this: ISupplyDataFunctions, itemIndex: number): Promise<SupplyData> {
+		// Import NodeOperationError inside the function to avoid top-level runtime imports
+		const { NodeOperationError } = await import('n8n-workflow');
+
 		const toolName = 'custom_final_answer_tool'; // this.getNodeParameter('toolName', itemIndex) as string;
 		const description = this.getNodeParameter('description', itemIndex) as string;
 		const jsonSchemaParam = this.getNodeParameter('jsonSchema', itemIndex);
