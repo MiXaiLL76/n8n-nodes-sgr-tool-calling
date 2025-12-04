@@ -19,7 +19,7 @@ are automatically disabled in SGR Agent to avoid conflicts.`;
 export class SgrCustomFinalAnswerTool implements INodeType {
 	description: INodeTypeDescription = {
 		displayName: 'SGR Custom Final Answer Tool',
-		name: 'sgrCustomFinalAnswerTool',
+		name: 'sgrCustomFinalAnswer',
 		icon: 'file:../SGR/SGR.svg',
 		group: ['transform'],
 		version: 1,
