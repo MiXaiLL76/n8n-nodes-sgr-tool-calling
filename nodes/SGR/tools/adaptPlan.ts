@@ -1,4 +1,4 @@
-// https://github.com/vamplabAI/sgr-deep-research/blob/main/sgr_deep_research/core/tools/adapt_plan_tool.py
+// https://github.com/vamplabAI/sgr-agent-core/blob/main/sgr_deep_research/core/tools/adapt_plan_tool.py
 export const adaptPlanTool = {
 	name: 'adapt_plan_tool',
 	description: 'Adapt research plan based on new findings.',

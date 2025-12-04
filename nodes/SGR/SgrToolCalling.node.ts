@@ -402,7 +402,16 @@ export class SgrToolCalling implements INodeType {
 			}
 
 			try {
+				// Check if this is a clarification response
+				const clarificationAnswers = String(
+					items[itemIndex].json.clarificationAnswers ||
+						items[itemIndex].json.clarification ||
+						items[itemIndex].json.answers ||
+						'',
+				);
+
 				// Get task from input item (from Chat Trigger or previous node)
+				// If clarification answers provided, task can be empty (will be restored from memory)
 				const task = String(
 					items[itemIndex].json.chatInput ||
 						items[itemIndex].json.input ||
@@ -412,7 +421,8 @@ export class SgrToolCalling implements INodeType {
 						'',
 				);
 
-				if (!task) {
+				// If no clarification answers, task is required
+				if (!clarificationAnswers && !task) {
 					throw new NodeOperationError(
 						this.getNode(),
 						'No task found in input. Make sure the previous node provides chatInput, input, message, text, or task field.',
@@ -454,10 +464,11 @@ export class SgrToolCalling implements INodeType {
 
 				// Create agent configuration for commands
 				const config: AgentConfig = {
-					task,
+					task: task || 'Continue research', // Use placeholder if clarification answers provided
 					systemPrompt: prompts.systemPrompt || undefined,
 					initialUserRequest: prompts.initialUserRequest || undefined,
 					clarificationResponse: prompts.clarificationResponse || undefined,
+					clarificationAnswers: clarificationAnswers || undefined,
 					maxIterations,
 					maxSearches,
 					maxClarifications,

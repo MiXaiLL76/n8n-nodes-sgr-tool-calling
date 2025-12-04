@@ -1,4 +1,4 @@
-// https://github.com/vamplabAI/sgr-deep-research/blob/main/sgr_deep_research/core/tools/final_answer_tool.py
+// https://github.com/vamplabAI/sgr-agent-core/blob/main/sgr_deep_research/core/tools/final_answer_tool.py
 
 export const finalAnswerTool = {
 	name: 'final_answer_tool',

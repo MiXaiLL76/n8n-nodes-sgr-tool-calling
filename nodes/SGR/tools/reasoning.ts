@@ -1,4 +1,4 @@
-// https://github.com/vamplabAI/sgr-deep-research/blob/main/sgr_deep_research/core/tools/reasoning_tool.py
+// https://github.com/vamplabAI/sgr-agent-core/blob/main/sgr_deep_research/core/tools/reasoning_tool.py
 
 export const reasoningTool = {
 	name: 'reasoning_tool',

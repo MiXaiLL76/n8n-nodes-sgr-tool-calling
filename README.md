@@ -2,7 +2,7 @@
 
 ![SGR Example](./SGR_Example.png)
 
-AI research agent with OpenAI function calling for n8n. Port of [sgr-deep-research](https://github.com/vamplabAI/sgr-deep-research) Python project.
+AI research agent with OpenAI function calling for n8n. Port of [sgr-agent-core](https://github.com/vamplabAI/sgr-agent-core) Python project.
 
 **Copyright (C) 2025 MiXaiLL76 (mike.milos@yandex.ru)**
 
@@ -11,16 +11,6 @@ AI research agent with OpenAI function calling for n8n. Port of [sgr-deep-resear
 ## Installation
 
 Follow the [installation guide](https://docs.n8n.io/integrations/community-nodes/installation/) in the n8n community nodes documentation.
-
-### Upgrading from version 0.1.2
-
-If you have version **0.1.2** or earlier installed, you need to manually remove it before installing the new version:
-
-1. **Uninstall the old package** from n8n Community Nodes settings
-2. **Restart n8n** to ensure the old package is completely removed
-3. **Install the new version** from npm or GitHub
-
-This is required due to a fix in package structure that prevents automatic updates from 0.1.2 to 0.1.3+.
 
 ## Quick Start
 
@@ -73,6 +63,22 @@ Connect n8n Memory node for conversation history:
 - Automatically clears when `sessionId` changes
 - Supports `/clear` and `/new` commands
 - Only stores user questions and final answers (not internal reasoning)
+- **Clarification Support**: preserves conversation context when agent requests clarifications
+
+### Clarification Flow
+
+When agent needs clarification, it uses the `clarification_tool` to ask questions:
+
+1. **Agent Requests Clarification**
+   - Agent analyzes the task and identifies ambiguous terms
+   - Calls `clarification_tool` with 3 specific questions
+   - Conversation history (including questions) is saved to Memory
+   - Execution pauses with state `WAITING_FOR_CLARIFICATION`
+
+2. **User Provides Answers**
+   - Send answers via `clarificationAnswers` field in input
+   - Agent loads conversation history from Memory
+   - Continues research with full context
 
 ### Limits
 
@@ -93,7 +99,7 @@ Override default prompts:
 ## Resources
 
 - [n8n community nodes documentation](https://docs.n8n.io/integrations/#community-nodes)
-- [SGR Deep Research (Original Python Project)](https://github.com/vamplabAI/sgr-deep-research)
+- [SGR Deep Research (Original Python Project)](https://github.com/vamplabAI/sgr-agent-core)
 - [n8n AI Agents Documentation](https://docs.n8n.io/integrations/builtin/cluster-nodes/root-nodes/n8n-nodes-langchain.agent/)
 
 ## License

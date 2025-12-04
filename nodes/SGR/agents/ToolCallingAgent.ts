@@ -1,12 +1,13 @@
 /**
  * Tool Calling Agent
- * Port of ToolCallingResearchAgent from sgr-deep-research Python project
+ * Port of ToolCallingResearchAgent from sgr-agent-core Python project
  */
 /* eslint-disable @typescript-eslint/ban-ts-comment */
 // @ts-nocheck
 
 import { BaseAgent } from './BaseAgent';
 import type { Tool, ToolCall } from '../types';
+import { AgentState } from '../types';
 import {
 	reasoningTool,
 	finalAnswerTool,
@@ -431,6 +432,18 @@ export class ToolCallingAgent extends BaseAgent {
 
 			// Log tool result
 			this.context.logToolResult(toolName, toolResult);
+
+			// Check if clarification tool was called - stop execution and wait for user response
+			if (toolName.toLowerCase().includes('clarification')) {
+				this.logger.info('\n⏸️  Research paused - waiting for clarification from user');
+				this.context.state = AgentState.WAITING_FOR_CLARIFICATION;
+
+				// Save conversation history to memory including clarification questions
+				await this.saveClarificationToMemory();
+
+				this.context.complete(); // Mark as complete to exit main loop
+				return; // Exit processToolCalls immediately
+			}
 		}
 	}
 

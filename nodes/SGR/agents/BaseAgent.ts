@@ -1,15 +1,17 @@
 /**
  * Base Agent class
- * Port of BaseAgent from sgr-deep-research Python project
+ * Port of BaseAgent from sgr-agent-core Python project
  */
 /* eslint-disable @typescript-eslint/ban-ts-comment */
 // @ts-nocheck
 import { NodeOperationError, type IExecuteFunctions, type Logger } from 'n8n-workflow';
 import { AgentContext } from '../core/context';
 import type { Message, Tool, AIModelResponse } from '../types';
+import { AgentState } from '../types';
 import {
 	DEFAULT_SYSTEM_PROMPT,
 	DEFAULT_INITIAL_USER_REQUEST,
+	DEFAULT_CLARIFICATION_RESPONSE,
 	formatPrompt,
 	getCurrentDate,
 } from '../prompts';
@@ -41,6 +43,7 @@ export interface AgentConfig {
 	systemPrompt?: string;
 	initialUserRequest?: string;
 	clarificationResponse?: string;
+	clarificationAnswers?: string; // User's answers to clarification questions
 	maxIterations: number;
 	maxSearches: number;
 	maxClarifications: number;
@@ -138,6 +141,53 @@ export abstract class BaseAgent {
 			}
 		}
 
+		// Check if this is a clarification response (user providing answers)
+		if (this.config.clarificationAnswers) {
+			this.logger.info('▶️  Resuming from clarification with user answers');
+
+			// Load the conversation from memory - it should contain the full context including clarification
+			// The conversation is already loaded in previousMessages above
+
+			// Replace the current task with clarification response
+			const clarificationResponseTemplate =
+				this.config.clarificationResponse || DEFAULT_CLARIFICATION_RESPONSE;
+			const formattedClarificationResponse = formatPrompt(clarificationResponseTemplate, {
+				current_date: getCurrentDate(),
+				clarifications: this.config.clarificationAnswers,
+			});
+
+			// Initialize conversation with system prompt only
+			const systemPrompt = this.config.systemPrompt || DEFAULT_SYSTEM_PROMPT;
+			const tools = this.prepareTools();
+			const availableToolsStr = tools
+				.map((tool, index) => `${index + 1}. ${tool.function.name}: ${tool.function.description}`)
+				.join('\n');
+
+			const formattedSystemPrompt = formatPrompt(systemPrompt, {
+				available_tools: availableToolsStr,
+			});
+
+			// Build conversation: [system, ...previous (includes clarification), user_answers]
+			this.conversation = [
+				{
+					role: 'system',
+					content: formattedSystemPrompt,
+				},
+				...previousMessages,
+				{
+					role: 'user',
+					content: formattedClarificationResponse,
+				},
+			];
+
+			// Reset state from WAITING_FOR_CLARIFICATION to RESEARCHING
+			this.context.state = AgentState.RESEARCHING;
+
+			this.logger.debug('📋 Conversation resumed with clarification answers');
+			return;
+		}
+
+		// Normal initialization - new task
 		// Always initialize with system prompt and current task
 		this.initializeConversation();
 
@@ -369,7 +419,43 @@ export abstract class BaseAgent {
 		let finalContent = '';
 		let answer = '';
 
-		// Try to extract answer from the last tool result
+		// Check if we're waiting for clarification
+		if (this.context.state === AgentState.WAITING_FOR_CLARIFICATION) {
+			// Find the clarification tool result
+			let clarificationQuestions = '';
+
+			// Search backwards through conversation for clarification tool result
+			for (let i = this.conversation.length - 1; i >= 0; i--) {
+				const msg = this.conversation[i];
+				if (msg.role === 'tool' && msg.name?.toLowerCase().includes('clarification')) {
+					clarificationQuestions = msg.content || '';
+					break;
+				}
+			}
+
+			// Extract tool usage summary from execution log
+			const toolCalls = this.context.executionLog.filter((entry) => entry.type === 'tool_call');
+			const toolsSummary = toolCalls.map((entry) => ({
+				iteration: entry.iteration,
+				tool: entry.tool,
+				timestamp: entry.timestamp,
+			}));
+
+			return {
+				task: this.config.task,
+				state: this.context.state,
+				iterations: this.context.iteration,
+				clarification_needed: true,
+				clarification_questions: clarificationQuestions,
+				answer: clarificationQuestions, // For compatibility with existing output format
+				final_message: '⏸️ Waiting for clarification from user',
+				tools_used: toolsSummary,
+				log: this.context.executionLog,
+				conversation: this.conversation,
+			};
+		}
+
+		// Normal flow - try to extract answer from the last tool result
 		if (lastMessage.role === 'tool') {
 			const toolResult = lastMessage.content;
 			// Try to parse JSON from tool result
@@ -416,11 +502,83 @@ export abstract class BaseAgent {
 	}
 
 	/**
+	 * Save conversation to memory including clarification questions
+	 * This is called when clarification_tool is invoked
+	 */
+	async saveClarificationToMemory(): Promise<void> {
+		if (!this.memory) return;
+
+		try {
+			// Get the original user question from config
+			const userQuestion = this.config.task;
+			if (!userQuestion) {
+				this.logger.debug(`📭 No user question to save`);
+				return;
+			}
+
+			// Find clarification questions from tool result
+			let clarificationQuestions = '';
+			for (let i = this.conversation.length - 1; i >= 0; i--) {
+				const msg = this.conversation[i];
+				if (msg.role === 'tool' && msg.name?.toLowerCase().includes('clarification')) {
+					clarificationQuestions = msg.content || '';
+					break;
+				}
+			}
+
+			if (!clarificationQuestions) {
+				this.logger.debug(`📭 No clarification questions found`);
+				return;
+			}
+
+			// LangChain BufferWindowMemory interface
+			if (typeof this.memory.saveContext === 'function') {
+				// Save as: User question -> Clarification questions
+				// This preserves the conversation flow for when user provides answers
+				await this.memory.saveContext(
+					{ input: userQuestion },
+					{ output: clarificationQuestions },
+				);
+			} else if (
+				this.memory.chatHistory &&
+				typeof this.memory.chatHistory.addMessage === 'function'
+			) {
+				// Alternative interface with chatHistory.addMessage
+				await this.memory.chatHistory.addMessage({
+					content: userQuestion,
+					role: 'human',
+				});
+				await this.memory.chatHistory.addMessage({
+					content: clarificationQuestions,
+					role: 'ai',
+				});
+			} else {
+				this.logger.debug('Memory node does not support expected save interface');
+				return;
+			}
+
+			this.logger.info(
+				`💾 Saved conversation with clarification to memory:\n   User: ${userQuestion.substring(0, 50)}...\n   Questions: ${clarificationQuestions.substring(0, 100)}...`,
+			);
+		} catch (error) {
+			this.logger.warn(`⚠️  Failed to save clarification to memory: ${(error as Error).message}`);
+		}
+	}
+
+	/**
 	 * Save conversation to memory
 	 * Only saves NEW messages that were added after loading from memory
 	 */
 	async saveToMemory(): Promise<void> {
 		if (!this.memory) return;
+
+		// Don't save to memory if waiting for clarification
+		if (this.context.state === AgentState.WAITING_FOR_CLARIFICATION) {
+			this.logger.debug(
+				`⏸️  Not saving to memory - waiting for clarification (already saved via saveClarificationToMemory)`,
+			);
+			return;
+		}
 
 		try {
 			// Get only NEW messages (skip those loaded from memory)

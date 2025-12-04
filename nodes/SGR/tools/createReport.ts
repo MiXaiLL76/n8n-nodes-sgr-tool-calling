@@ -1,4 +1,4 @@
-// https://github.com/vamplabAI/sgr-deep-research/blob/main/sgr_deep_research/core/tools/create_report_tool.py
+// https://github.com/vamplabAI/sgr-agent-core/blob/main/sgr_deep_research/core/tools/create_report_tool.py
 import type { AgentContext } from '../core/context';
 import type { Logger } from 'n8n-workflow';
 
