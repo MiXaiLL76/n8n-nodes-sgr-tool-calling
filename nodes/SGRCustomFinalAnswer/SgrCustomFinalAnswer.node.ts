@@ -143,6 +143,30 @@ export class SgrCustomFinalAnswer implements INodeType {
 			throw new NodeOperationError(this.getNode(), 'JSON schema must have "properties" object');
 		}
 
+		// Auto-generate required array if missing or empty
+		const properties = schema.properties as Record<string, any>;
+		const propertyKeys = Object.keys(properties);
+
+		if (!schema.required || !Array.isArray(schema.required) || schema.required.length === 0) {
+			schema.required = propertyKeys;
+		}
+
+		// Auto-generate descriptions for fields that don't have them
+		for (const [fieldName, fieldSchema] of Object.entries(properties)) {
+			if (typeof fieldSchema === 'object' && fieldSchema !== null && !fieldSchema.description) {
+				// Convert field name to human-readable format
+				// e.g., "person" -> "Person", "user_name" -> "User name", "dateOfBirth" -> "Date of birth"
+				const humanReadable = fieldName
+					.replace(/_/g, ' ')
+					.replace(/([A-Z])/g, ' $1')
+					.trim()
+					.toLowerCase()
+					.replace(/^\w/, (c) => c.toUpperCase());
+
+				fieldSchema.description = `Provide the ${humanReadable} value based on your research and findings`;
+			}
+		}
+
 		const tool = {
 			name: toolName,
 			description,
