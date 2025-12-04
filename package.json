@@ -40,7 +40,8 @@
 		],
 		"nodes": [
 			"dist/nodes/SGR/SgrToolCalling.node.js",
-			"dist/nodes/SGRTavilySearchTool/SgrTavilySearchTool.node.js"
+			"dist/nodes/SGRTavilySearchTool/SgrTavilySearchTool.node.js",
+			"dist/nodes/SGRCustomFinalAnswerTool/SgrCustomFinalAnswerTool.node.js"
 		]
 	},
 	"devDependencies": {

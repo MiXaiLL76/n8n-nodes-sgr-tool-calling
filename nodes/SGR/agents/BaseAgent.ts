@@ -455,6 +455,27 @@ export abstract class BaseAgent {
 			};
 		}
 
+		// Check if a custom final answer tool was used
+		// Look for the last tool call in execution log that is a final answer tool
+		const toolCalls = this.context.executionLog.filter((entry) => entry.type === 'tool_call');
+		const lastToolCall = toolCalls.length > 0 ? toolCalls[toolCalls.length - 1] : null;
+
+		if (lastToolCall) {
+			const toolName = lastToolCall.tool;
+			const isCustomFinalAnswerTool =
+				toolName !== 'final_answer_tool' && // Not the built-in one
+				(toolName.toLowerCase().includes('final') || toolName.toLowerCase().includes('answer')) &&
+				lastToolCall.arguments;
+
+			// If custom final answer tool was used, return only its arguments
+			if (isCustomFinalAnswerTool) {
+				this.logger.info(
+					`📤 Custom final answer tool detected: ${toolName}. Returning tool arguments directly.`,
+				);
+				return lastToolCall.arguments as Record<string, unknown>;
+			}
+		}
+
 		// Normal flow - try to extract answer from the last tool result
 		if (lastMessage.role === 'tool') {
 			const toolResult = lastMessage.content;
@@ -482,7 +503,6 @@ export abstract class BaseAgent {
 		}
 
 		// Extract tool usage summary from execution log
-		const toolCalls = this.context.executionLog.filter((entry) => entry.type === 'tool_call');
 		const toolsSummary = toolCalls.map((entry) => ({
 			iteration: entry.iteration,
 			tool: entry.tool,
@@ -535,10 +555,7 @@ export abstract class BaseAgent {
 			if (typeof this.memory.saveContext === 'function') {
 				// Save as: User question -> Clarification questions
 				// This preserves the conversation flow for when user provides answers
-				await this.memory.saveContext(
-					{ input: userQuestion },
-					{ output: clarificationQuestions },
-				);
+				await this.memory.saveContext({ input: userQuestion }, { output: clarificationQuestions });
 			} else if (
 				this.memory.chatHistory &&
 				typeof this.memory.chatHistory.addMessage === 'function'

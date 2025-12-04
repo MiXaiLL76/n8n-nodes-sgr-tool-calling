@@ -476,6 +476,22 @@ export class ToolCallingAgent extends BaseAgent {
 		const clarificationLimitReached =
 			this.context.clarifications_used >= this.config.maxClarifications;
 
+		// Check if custom final answer tool is connected
+		// If custom final answer tool is connected, automatically disable built-in finalAnswer and clarification
+		const allConnectedTools = this.config.connectedTools || [];
+		const hasCustomFinalAnswerTool = allConnectedTools.some(
+			(t) =>
+				t.name.toLowerCase().includes('final_answer') ||
+				t.name.toLowerCase().includes('finalanswer') ||
+				t.name === 'custom_final_answer_tool',
+		);
+
+		if (hasCustomFinalAnswerTool) {
+			this.logger.info(
+				'🔧 Custom Final Answer Tool detected - automatically disabling built-in Final Answer and Clarification tools',
+			);
+		}
+
 		// Reasoning tool - always available if enabled
 		if (builtInTools.enableReasoning !== false) {
 			tools.push({
@@ -488,8 +504,8 @@ export class ToolCallingAgent extends BaseAgent {
 			});
 		}
 
-		// Final Answer tool - always available if enabled
-		if (builtInTools.enableFinalAnswer !== false) {
+		// Final Answer tool - available if enabled and no custom final answer tool is connected
+		if (builtInTools.enableFinalAnswer !== false && !hasCustomFinalAnswerTool) {
 			tools.push({
 				type: 'function' as const,
 				function: {
@@ -530,8 +546,12 @@ export class ToolCallingAgent extends BaseAgent {
 			return [...tools, ...connectedToolsFormatted];
 		}
 
-		// Clarification tool - available if enabled and limit not reached
-		if (builtInTools.enableClarification !== false && !clarificationLimitReached) {
+		// Clarification tool - available if enabled, limit not reached, and no custom final answer tool
+		if (
+			builtInTools.enableClarification !== false &&
+			!clarificationLimitReached &&
+			!hasCustomFinalAnswerTool
+		) {
 			tools.push({
 				type: 'function' as const,
 				function: {

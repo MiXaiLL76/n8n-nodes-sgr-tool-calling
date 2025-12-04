@@ -49,11 +49,23 @@ All tools can be enabled/disabled in node settings.
 Connect any n8n AI Tool:
 
 - **SGR Tavily Search** - web search (included)
+- **SGR Custom Final Answer Tool** - customizable final answer schema (included)
 - **MCP Client Tool** - Model Context Protocol integrations
 - **LangChain Tools** - calculators, code interpreters, etc.
 - Supports the `/tools` command to display all connected tools
 
 Agent automatically highlights connected tools when they execute.
+
+#### SGR Custom Final Answer Tool
+
+Allows you to customize the JSON schema for the final answer tool:
+
+- Define your own schema structure using JSON Schema format
+- Default schema imported from `nodes/SGR/tools/finalAnswer.ts`
+- Automatically disables built-in Final Answer and Clarification tools when connected
+- Built-in schema validation ensures proper format
+- Supports both full JSON return or field extraction
+- Perfect for custom report formats with specific fields like citations, confidence scores, metadata, etc.
 
 ### Memory
 
